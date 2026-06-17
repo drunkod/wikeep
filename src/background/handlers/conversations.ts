@@ -91,7 +91,7 @@ export async function captureViaDom(
   return {
     conversationId: result.conversationId,
     messageCount: result.messageCount,
-    pending: false,
+    pending: payload.pending ?? false,
     method: "dom",
     savedAt: payload.snapshot.capturedAt,
     repoNames: payload.snapshot.metadata?.repoNames,

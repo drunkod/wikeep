@@ -115,7 +115,8 @@ export type CaptureStatusReason =
   | "api_fetch_failed"
   | "dom_not_ready"
   | "unsupported_dom_structure"
-  | "storage_error";
+  | "storage_error"
+  | "capture_still_pending";
 
 export interface CaptureStatus {
   supported: boolean;

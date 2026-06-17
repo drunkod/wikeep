@@ -106,6 +106,18 @@ export async function saveFull(
 
   const result = await upsertWikiPage(snapshot);
 
+  if (tabId) {
+    await emitWikiPageStateChanged(
+      tabId,
+      getWikiPageStateForUrl(
+        snapshot.url,
+        result.pageId,
+        snapshot.title,
+        "saved_fresh",
+      ),
+    );
+  }
+
   return {
     pageId: result.pageId,
     changed: result.changed,

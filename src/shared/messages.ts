@@ -164,6 +164,8 @@ export interface CaptureDeepWikiSessionPayload {
 
 export interface CaptureDomSnapshotPayload {
   snapshot: CapturePayload;
+  /** True when the source session was still generating (incomplete). */
+  pending?: boolean;
 }
 
 export interface LookupConversationByQueryIdPayload {

@@ -57,6 +57,15 @@ export async function upsertWikiPage(
 
   const shouldPreserveExisting = wouldDowngrade || wouldDowngradeDiagrams;
 
+  // If we keep the richer existing markdown but the live page's fingerprint
+  // moved on, the preserved copy is now outdated — flag it stale so the UI
+  // surfaces that a refresh is needed.
+  const fingerprintChanged =
+    !!existing &&
+    (existing.contentHash !== snapshot.contentHash ||
+      existing.indexedCommit !== snapshot.indexedCommit);
+  const preservedButStale = shouldPreserveExisting && fingerprintChanged;
+
   const changed =
     !!existing &&
     !shouldPreserveExisting &&
@@ -96,7 +105,7 @@ export async function upsertWikiPage(
     createdAt: existing?.createdAt ?? snapshot.capturedAt ?? now,
     updatedAt: shouldPreserveExisting ? existing.updatedAt : now,
     lastCheckedAt: now,
-    isStale: false,
+    isStale: preservedButStale,
     schemaVersion: SCHEMA_VERSION,
   };
 

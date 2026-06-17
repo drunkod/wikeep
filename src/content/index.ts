@@ -97,15 +97,50 @@ async function captureDevinSession(queryId: string): Promise<CaptureResult> {
   }
 
   const session = await fetchDevinSession(queryId, auth);
-  const { snapshot } = buildCapturePayloadFromDeepWikiSession(
+  const { snapshot, pending } = buildCapturePayloadFromDeepWikiSession(
     session,
     window.location.href,
   );
 
   return sendRuntimeMessage<CaptureResult, CaptureDomSnapshotPayload>(
     "CAPTURE_DOM_SNAPSHOT",
-    { snapshot },
+    { snapshot, pending },
   );
+}
+
+const PENDING_POLL_MS = 5_000;
+const MAX_POLL_ATTEMPTS = 24;
+
+let pollingTimer: number | null = null;
+let pollingAttempts = 0;
+
+function stopPendingPolling(): void {
+  if (pollingTimer !== null) {
+    window.clearInterval(pollingTimer);
+    pollingTimer = null;
+  }
+  pollingAttempts = 0;
+}
+
+function startPendingPolling(queryId: string): void {
+  if (pollingTimer !== null) return;
+
+  pollingAttempts = 0;
+  pollingTimer = window.setInterval(() => {
+    pollingAttempts += 1;
+
+    if (pollingAttempts > MAX_POLL_ATTEMPTS) {
+      stopPendingPolling();
+      setStatus({
+        active: false,
+        pending: true,
+        reason: "capture_still_pending",
+      });
+      return;
+    }
+
+    void captureSession(queryId, true);
+  }, PENDING_POLL_MS);
 }
 
 async function captureSession(
@@ -132,6 +167,7 @@ async function captureSession(
   try {
     const settings = await loadSettings();
     if (!force && !settings.autoCaptureEnabled) {
+      stopPendingPolling();
       setStatus({
         active: false,
         pending: false,
@@ -160,6 +196,13 @@ async function captureSession(
       repoNames: result.repoNames,
       performance: result.performance,
     });
+
+    // The session may still be generating; retry until it completes.
+    if (result.pending) {
+      startPendingPolling(queryId);
+    } else {
+      stopPendingPolling();
+    }
   } catch (error) {
     setStatus({
       active: false,

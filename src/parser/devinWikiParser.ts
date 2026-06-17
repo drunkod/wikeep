@@ -20,6 +20,17 @@ const CONTROL_LABELS = new Set(
   ].map((s) => s.toLowerCase()),
 );
 
+/** Keep the real Devin path/org slug; only set the full-wiki hash marker. */
+function withWikeepFullWikiHash(url: string): string {
+  try {
+    const next = new URL(url);
+    next.hash = "wikeep-full-wiki";
+    return next.toString();
+  } catch {
+    return url;
+  }
+}
+
 const OUTLINE_BUTTON_SELECTOR =
   '[data-slot="sidebar-content"] [data-slot="sidebar-menu-button"] button[aria-label]';
 
@@ -133,7 +144,7 @@ export async function buildFullWikiFromDom(
   const repoFullName = `${parts.owner}/${parts.repo}`;
 
   return {
-    url: `https://app.devin.ai/org/wiki/${repoFullName}#wikeep-full-wiki`,
+    url: withWikeepFullWikiHash(url),
     owner: parts.owner,
     repo: parts.repo,
     kind: "full-wiki",
