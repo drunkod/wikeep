@@ -49,33 +49,63 @@ function getProseMain(doc: Document): HTMLElement | null {
   );
 }
 
-/**
- * Wait until the active section has rendered: the h1 text differs from the
- * previous section AND content length is stable across two polls (so
- * lazy-rendered mermaid/SVG diagrams have painted). Falls back at `timeoutMs`.
- */
-async function waitForSectionSettled(
+function normLabel(value: string): string {
+  return normalizeText(value).toLowerCase();
+}
+
+/** Clean <h1> text, dropping the copy-link control so it matches the label. */
+function cleanHeading(root: HTMLElement | null): string {
+  const h1 = root?.querySelector("h1");
+  if (!h1) return "";
+  const clone = h1.cloneNode(true) as HTMLElement;
+  clone
+    .querySelectorAll("a, button, svg, [role='button'], [aria-hidden='true']")
+    .forEach((n) => n.remove());
+  return normalizeText(clone.textContent ?? "");
+}
+
+/** Re-query the outline button for a label (refs go stale after re-render). */
+function findOutlineButtonByLabel(
   doc: Document,
-  previousHeading: string,
-  timeoutMs = 1000,
-): Promise<void> {
+  label: string,
+): HTMLButtonElement | null {
+  return (
+    getOutlineButtons(doc).find(
+      (b) => normLabel(b.getAttribute("aria-label") ?? "") === normLabel(label),
+    ) ?? null
+  );
+}
+
+/**
+ * Wait until the visible heading matches `expectedLabel` AND content length is
+ * stable across two polls (so lazy mermaid/SVG diagrams have painted). Returns
+ * true if it landed on the expected section, false on timeout.
+ */
+async function waitForSection(
+  doc: Document,
+  expectedLabel: string,
+  timeoutMs = 5000,
+): Promise<boolean> {
   const started = Date.now();
+  const expected = normLabel(expectedLabel);
   let lastLen = -1;
   let stableCount = 0;
 
   return new Promise((resolve) => {
     const tick = () => {
       const root = getProseMain(doc);
-      const heading = root?.querySelector("h1")?.textContent?.trim() ?? "";
+      const headingMatches = normLabel(cleanHeading(root)) === expected;
       const len = root ? (root.textContent ?? "").length : 0;
-
-      const headingChanged = heading !== "" && heading !== previousHeading;
       const lengthStable = len === lastLen && len > 0;
       stableCount = lengthStable ? stableCount + 1 : 0;
       lastLen = len;
 
-      if ((headingChanged && stableCount >= 1) || Date.now() - started >= timeoutMs) {
-        resolve();
+      if (headingMatches && stableCount >= 1) {
+        resolve(true);
+        return;
+      }
+      if (Date.now() - started >= timeoutMs) {
+        resolve(false);
         return;
       }
       window.setTimeout(tick, 120);
@@ -98,24 +128,31 @@ export async function buildFullWikiFromDom(
   const parts = parseWikiUrl(url);
   if (!parts) return null;
 
-  const buttons = getOutlineButtons(document);
-  if (buttons.length === 0) return null;
+  // Snapshot stable labels first; element refs go stale when the SPA
+  // re-renders the sidebar after a navigation, so re-query before each click.
+  const entryLabels = getOutlineButtons(document)
+    .map((b) => (b.getAttribute("aria-label") ?? "").trim())
+    .filter(Boolean);
+  if (entryLabels.length === 0) return null;
 
   const originalHash = location.hash;
   const sections: string[] = [];
   const labels: string[] = [];
-  let previousHeading = "";
   let usedFiber = false;
 
-  for (const btn of buttons) {
-    const label = (btn.getAttribute("aria-label") ?? "").trim();
+  for (const label of entryLabels) {
+    const btn = findOutlineButtonByLabel(document, label);
+    if (!btn) continue; // entry vanished after a re-render — skip it
+
     btn.click();
-    await waitForSectionSettled(document, previousHeading);
+
+    // Skip sections that never navigate to the expected heading rather than
+    // capturing stale/duplicate content from the previous section.
+    const landed = await waitForSection(document, label);
+    if (!landed) continue;
 
     const root = getProseMain(document);
     if (!root || (root.textContent ?? "").trim().length < 40) continue;
-
-    previousHeading = root.querySelector("h1")?.textContent?.trim() ?? previousHeading;
 
     let md: string | null = null;
     if (fetchSectionMarkdown) {

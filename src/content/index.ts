@@ -3,7 +3,8 @@ import {
   extractQueryIdFromUrl,
   fetchDevinSession,
 } from "../api/deepwikiApi";
-import { SETTINGS_KEY } from "../shared/constants";
+import { parseDeepWikiDomSnapshot } from "../parser/deepwikiDomParser";
+import { DEFAULT_SETTINGS, SETTINGS_KEY } from "../shared/constants";
 import type {
   CaptureDeepWikiSessionPayload,
   CaptureDomSnapshotPayload,
@@ -50,10 +51,14 @@ function setStatus(partial: Partial<CaptureStatus>): void {
 
 async function loadSettings(): Promise<Settings> {
   try {
-    return await sendRuntimeMessage<Settings>("GET_SETTINGS");
+    const response = await sendRuntimeMessage<Settings>("GET_SETTINGS");
+    return { ...DEFAULT_SETTINGS, ...response };
   } catch {
     const stored = await chrome.storage.local.get(SETTINGS_KEY);
-    return stored[SETTINGS_KEY] as Settings;
+    return {
+      ...DEFAULT_SETTINGS,
+      ...(stored[SETTINGS_KEY] as Partial<Settings> | undefined),
+    };
   }
 }
 
@@ -106,6 +111,30 @@ async function captureDevinSession(queryId: string): Promise<CaptureResult> {
     "CAPTURE_DOM_SNAPSHOT",
     { snapshot, pending },
   );
+}
+
+/**
+ * Capture a DeepWiki session via the API, falling back to DOM parsing if the
+ * API request fails (preserves the pre-refactor behavior). Storage dedupes by
+ * session id, so re-running is safe and won't create duplicates.
+ */
+async function captureDeepWikiSession(queryId: string): Promise<CaptureResult> {
+  try {
+    return await sendRuntimeMessage<
+      CaptureResult,
+      CaptureDeepWikiSessionPayload
+    >("CAPTURE_DEEPWIKI_SESSION", {
+      queryId,
+      sourceUrl: window.location.href,
+    });
+  } catch (apiError) {
+    const snapshot = parseDeepWikiDomSnapshot(document, window.location.href);
+    if (!snapshot) throw apiError;
+    return sendRuntimeMessage<CaptureResult, CaptureDomSnapshotPayload>(
+      "CAPTURE_DOM_SNAPSHOT",
+      { snapshot },
+    );
+  }
 }
 
 const PENDING_POLL_MS = 5_000;
@@ -178,13 +207,7 @@ async function captureSession(
 
     const result = isDevinHost()
       ? await captureDevinSession(queryId)
-      : await sendRuntimeMessage<
-          CaptureResult,
-          CaptureDeepWikiSessionPayload
-        >("CAPTURE_DEEPWIKI_SESSION", {
-          queryId,
-          sourceUrl: window.location.href,
-        });
+      : await captureDeepWikiSession(queryId);
 
     setStatus({
       active: result.pending,

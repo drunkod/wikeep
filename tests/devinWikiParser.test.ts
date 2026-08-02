@@ -11,13 +11,9 @@ function setupFullWikiDOM(): Document {
     <main><div class="prose-main"><h1>Intro</h1><p>${"x ".repeat(60)}</p></div></main>
   `;
 
-  // Define location on window
-  const locationMock = new URL("https://app.devin.ai/org/s/wiki/o/r");
-  Object.defineProperty(window, "location", {
-    value: locationMock,
-    writable: true,
-    configurable: true,
-  });
+  // No window.location setup needed: buildFullWikiFromDom takes the URL as an
+  // argument and only reads/restores location.hash (harmless on the default
+  // jsdom origin). Avoids cross-origin pushState SecurityError.
 
   const prose = document.querySelector(".prose-main")!;
   const set = (h: string, body: string) => () => {

@@ -42,45 +42,78 @@ const MD_PROP_KEYS = [
   "value",
 ];
 
+function normalizeHeading(value: string): string {
+  // eslint-disable-next-line no-control-regex
+  return value
+    .replace(/[​-‍﻿]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+/** The clean text of the visible <h1>, ignoring copy-link controls/icons. */
+function visibleHeading(host: Element): string {
+  const h1 = host.querySelector("h1");
+  if (!h1) return "";
+  const clone = h1.cloneNode(true) as HTMLElement;
+  clone
+    .querySelectorAll("a, button, svg, [role='button'], [aria-hidden='true']")
+    .forEach((n) => n.remove());
+  return normalizeHeading(clone.textContent ?? "");
+}
+
+/** First Markdown heading text from a candidate string. */
+function firstMarkdownHeading(markdown: string): string {
+  const line = markdown
+    .split("\n")
+    .map((l) => l.trim())
+    .find((l) => /^#{1,3}\s+/.test(l));
+  return line ? normalizeHeading(line.replace(/^#{1,3}\s+/, "")) : "";
+}
+
 /**
- * From the prose container's fiber, climb to the React root and DFS the whole
- * subtree for the LONGEST Markdown-looking string prop. On Devin only the
- * active page's renderer is mounted, so the longest match is the current page.
+ * Extract the CURRENT page's Markdown from React props.
+ *
+ * A Devin SPA keeps cached/hidden routes mounted, so the globally-longest
+ * Markdown string can belong to a different page. To avoid that we (1) anchor
+ * at the visible `.prose-main`, (2) climb a bounded number of ancestors (the
+ * Markdown renderer sits just above the prose node), and (3) only accept a
+ * candidate whose first heading matches the visible <h1>.
  */
 function extractPageMarkdown(): string | null {
   const host =
     document.querySelector(".prose-main") ??
     document.querySelector('[class*="prose"]');
+  if (!host) return null;
+
+  const expected = visibleHeading(host);
   const start = getFiber(host);
   if (!start) return null;
 
-  let root: Fiber = start;
-  while (root && root.return) root = root.return;
-
-  let best: string | null = null;
-  const stack: Fiber[] = [root];
-  let guard = 0;
-
-  while (stack.length && guard < 200_000) {
-    guard++;
-    const node = stack.pop();
-    if (!node) continue;
-
+  const candidates: string[] = [];
+  let node: Fiber = start;
+  let hops = 0;
+  while (node && hops < 40) {
     const props = node.memoizedProps;
     if (props) {
       for (const key of MD_PROP_KEYS) {
         const v = props[key];
-        if (looksLikeMarkdown(v) && (!best || v.length > best.length)) {
-          best = v;
-        }
+        if (looksLikeMarkdown(v)) candidates.push(v);
       }
     }
-
-    if (node.child) stack.push(node.child);
-    if (node.sibling) stack.push(node.sibling);
+    node = node.return ?? null;
+    hops += 1;
   }
 
-  return best;
+  // Prefer the longest candidate whose heading matches the visible page.
+  candidates.sort((a, b) => b.length - a.length);
+  for (const md of candidates) {
+    if (!expected || firstMarkdownHeading(md) === expected) {
+      return md;
+    }
+  }
+
+  return null;
 }
 
 window.addEventListener("message", (event: MessageEvent) => {

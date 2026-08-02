@@ -1,13 +1,24 @@
 import "fake-indexeddb/auto";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { WikiPageSnapshot } from "../src/shared/types";
 import {
+  clearAllWikiPages,
   deleteWikiPage,
   getWikiPage,
   listWikiPages,
   lookupWikiPageByUrl,
   upsertWikiPage,
 } from "../src/storage/pageRepository";
+
+// Isolate each test so pass/fail never depends on execution order. We clear the
+// store (rather than deleteDB) because the DB connection is cached/never closed,
+// so a delete would block on the open connection.
+beforeEach(async () => {
+  await clearAllWikiPages();
+});
+afterEach(async () => {
+  await clearAllWikiPages();
+});
 
 const base: WikiPageSnapshot = {
   url: "https://deepwiki.com/facebook/react/1.1-x",
