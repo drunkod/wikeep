@@ -31,16 +31,50 @@ function withWikeepFullWikiHash(url: string): string {
   }
 }
 
-const OUTLINE_BUTTON_SELECTOR =
-  '[data-slot="sidebar-content"] [data-slot="sidebar-menu-button"] button[aria-label]';
+type OutlineItem = {
+  label: string;
+  element: HTMLElement;
+};
 
-function getOutlineButtons(doc: Document): HTMLButtonElement[] {
-  return Array.from(
-    doc.querySelectorAll<HTMLButtonElement>(OUTLINE_BUTTON_SELECTOR),
-  ).filter((btn) => {
-    const label = (btn.getAttribute("aria-label") ?? "").trim().toLowerCase();
-    return label.length > 0 && !CONTROL_LABELS.has(label);
-  });
+// Devin uses Shadcn sidebar primitives. Depending on whether `asChild` is used,
+// `data-slot` can be on the clickable button/link itself or on a wrapper around
+// it. Nested wiki sections use `sidebar-menu-sub-button`.
+const OUTLINE_ITEM_SELECTOR = [
+  '[data-slot="sidebar-content"] [data-slot="sidebar-menu-button"][aria-label]',
+  '[data-slot="sidebar-content"] [data-slot="sidebar-menu-sub-button"][aria-label]',
+  '[data-slot="sidebar-content"] [data-slot="sidebar-menu-button"] button[aria-label]',
+  '[data-slot="sidebar-content"] [data-slot="sidebar-menu-button"] a[aria-label]',
+  '[data-slot="sidebar-content"] [data-slot="sidebar-menu-sub-button"] button[aria-label]',
+  '[data-slot="sidebar-content"] [data-slot="sidebar-menu-sub-button"] a[aria-label]',
+].join(", ");
+
+function clickableElement(node: Element): HTMLElement | null {
+  if (!(node instanceof HTMLElement)) return null;
+  if (node.matches("button, a, [role='button']")) return node;
+  return node.querySelector<HTMLElement>("button, a, [role='button']");
+}
+
+function getOutlineItems(doc: Document): OutlineItem[] {
+  const items: OutlineItem[] = [];
+  const seen = new Set<HTMLElement>();
+
+  for (const node of doc.querySelectorAll(OUTLINE_ITEM_SELECTOR)) {
+    const element = clickableElement(node);
+    if (!element || seen.has(element)) continue;
+
+    const label = (
+      node.getAttribute("aria-label") ??
+      element.getAttribute("aria-label") ??
+      ""
+    ).trim();
+    const normalized = label.toLowerCase();
+    if (!label || CONTROL_LABELS.has(normalized)) continue;
+
+    seen.add(element);
+    items.push({ label, element });
+  }
+
+  return items;
 }
 
 function getProseMain(doc: Document): HTMLElement | null {
@@ -64,15 +98,14 @@ function cleanHeading(root: HTMLElement | null): string {
   return normalizeText(clone.textContent ?? "");
 }
 
-/** Re-query the outline button for a label (refs go stale after re-render). */
-function findOutlineButtonByLabel(
+/** Re-query the outline item for a label (refs go stale after re-render). */
+function findOutlineItemByLabel(
   doc: Document,
   label: string,
-): HTMLButtonElement | null {
+): HTMLElement | null {
   return (
-    getOutlineButtons(doc).find(
-      (b) => normLabel(b.getAttribute("aria-label") ?? "") === normLabel(label),
-    ) ?? null
+    getOutlineItems(doc).find((item) => normLabel(item.label) === normLabel(label))
+      ?.element ?? null
   );
 }
 
@@ -130,9 +163,7 @@ export async function buildFullWikiFromDom(
 
   // Snapshot stable labels first; element refs go stale when the SPA
   // re-renders the sidebar after a navigation, so re-query before each click.
-  const entryLabels = getOutlineButtons(document)
-    .map((b) => (b.getAttribute("aria-label") ?? "").trim())
-    .filter(Boolean);
+  const entryLabels = getOutlineItems(document).map((item) => item.label);
   if (entryLabels.length === 0) return null;
 
   const originalHash = location.hash;
@@ -141,10 +172,10 @@ export async function buildFullWikiFromDom(
   let usedFiber = false;
 
   for (const label of entryLabels) {
-    const btn = findOutlineButtonByLabel(document, label);
-    if (!btn) continue; // entry vanished after a re-render — skip it
+    const item = findOutlineItemByLabel(document, label);
+    if (!item) continue; // entry vanished after a re-render — skip it
 
-    btn.click();
+    item.click();
 
     // Skip sections that never navigate to the expected heading rather than
     // capturing stale/duplicate content from the previous section.
