@@ -1,38 +1,42 @@
-import { describe, expect, it } from 'vitest';
-import { isWikiPageUrl, parseWikiUrl } from '../src/shared/wikiUrl';
+import { describe, expect, it } from "vitest";
+import { isWikiPageUrl, parseWikiUrl } from "../src/shared/wikiUrl";
 
-describe('isWikiPageUrl', () => {
+describe("isWikiPageUrl", () => {
   const yes = [
-    'https://deepwiki.com/facebook/react',
-    'https://deepwiki.com/facebook/react/1-react-repository-overview',
-    'https://deepwiki.com/facebook/react/1.1-repository-structure-and-packages',
-    'https://deepwiki.com/vercel/next.js/3.4-react-server-components:-flight-protocol'
+    "https://deepwiki.com/facebook/react",
+    "https://deepwiki.com/facebook/react/1-react-repository-overview",
+    "https://deepwiki.com/facebook/react/1.1-repository-structure-and-packages",
+    "https://deepwiki.com/vercel/next.js/3.4-react-server-components:-flight-protocol",
   ];
   const no = [
-    'https://deepwiki.com/',
-    'https://deepwiki.com/search/what-is-the-react-scheduler_abc123',
-    'https://deepwiki.com/settings',
-    'https://example.com/facebook/react'
+    "https://deepwiki.com/",
+    "https://deepwiki.com/search/what-is-the-react-scheduler_abc123",
+    "https://deepwiki.com/settings",
+    "https://example.com/facebook/react",
   ];
 
-  it.each(yes)('accepts %s', (u) => expect(isWikiPageUrl(u)).toBe(true));
-  it.each(no)('rejects %s', (u) => expect(isWikiPageUrl(u)).toBe(false));
+  it.each(yes)("accepts %s", (url) => expect(isWikiPageUrl(url)).toBe(true));
+  it.each(no)("rejects %s", (url) => expect(isWikiPageUrl(url)).toBe(false));
 });
 
-describe('parseWikiUrl', () => {
-  it('parses an overview URL', () => {
-    expect(parseWikiUrl('https://deepwiki.com/facebook/react')).toEqual({
-      owner: 'facebook',
-      repo: 'react',
-      sectionPath: undefined
+describe("parseWikiUrl", () => {
+  it("parses an overview URL", () => {
+    expect(parseWikiUrl("https://deepwiki.com/facebook/react")).toEqual({
+      owner: "facebook",
+      repo: "react",
+      sectionPath: undefined,
     });
   });
 
-  it('parses a section URL', () => {
-    expect(parseWikiUrl('https://deepwiki.com/facebook/react/1.1-repository-structure-and-packages')).toEqual({
-      owner: 'facebook',
-      repo: 'react',
-      sectionPath: '1.1-repository-structure-and-packages'
+  it("parses a section URL", () => {
+    expect(
+      parseWikiUrl(
+        "https://deepwiki.com/facebook/react/1.1-repository-structure-and-packages",
+      ),
+    ).toEqual({
+      owner: "facebook",
+      repo: "react",
+      sectionPath: "1.1-repository-structure-and-packages",
     });
   });
 });
@@ -59,6 +63,30 @@ describe("Devin wiki URLs", () => {
 
   it("parses a bare numeric hash", () => {
     expect(parseWikiUrl(`${root}#3`)?.sectionPath).toBe("3");
+  });
+
+  it("matches the current /page/10 route with an encoded Cyrillic org slug", () => {
+    const url =
+      "https://app.devin.ai/org/%D0%B0%D0%BB%D0%B5%D0%BA%D1%81%D0%B0%D0%BD%D0%B4%D1%80-%D0%B5%D1%80%D0%BE%D1%84%D0%B5%D0%B5%D0%B2-c5c1f593e932/wiki/drunkod/repo-harness/page/10?branch=agent%2Fchatgpt-github-create-mvp";
+
+    expect(isWikiPageUrl(url)).toBe(true);
+    expect(parseWikiUrl(url)).toEqual({
+      owner: "drunkod",
+      repo: "repo-harness",
+      sectionPath: "10",
+    });
+  });
+
+  it("parses dotted Devin page section paths", () => {
+    const url = `${root}/page/9.2?branch=master`;
+    expect(isWikiPageUrl(url)).toBe(true);
+    expect(parseWikiUrl(url)?.sectionPath).toBe("9.2");
+  });
+
+  it("rejects malformed or unsupported Devin page routes", () => {
+    expect(isWikiPageUrl(`${root}/page`)).toBe(false);
+    expect(isWikiPageUrl(`${root}/page/not-a-section`)).toBe(false);
+    expect(isWikiPageUrl(`${root}/page/1/extra`)).toBe(false);
   });
 
   it("rejects non-wiki Devin paths", () => {
