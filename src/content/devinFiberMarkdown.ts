@@ -54,7 +54,7 @@ export function normalizeDevinHeading(value: string): string {
   // eslint-disable-next-line no-control-regex
   return value
     .replace(/[\u200B-\u200D\uFEFF]/g, "")
-    .replace(/!??\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/!?\[([^\]]+)\]\([^)]*\)/g, "$1")
     .replace(/[`*_~]/g, "")
     .replace(/[–—]/g, "-")
     .replace(/[“”]/g, '"')
@@ -232,7 +232,10 @@ function candidateRank(
         : 0
     : 1;
   const mermaidRank = /```\s*mermaid\b/i.test(markdown) ? 1 : 0;
-  return [headingRank, mermaidRank, markdown.length];
+  // Prefer the complete, longest page source after heading correctness. Mermaid
+  // is only a final tie-breaker so a short diagram component cannot beat the
+  // full page Markdown.
+  return [headingRank, markdown.length, mermaidRank];
 }
 
 /**
