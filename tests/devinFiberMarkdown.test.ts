@@ -75,7 +75,7 @@ describe("extractDevinPageMarkdown", () => {
   });
 
   it("searches a bounded descendant subtree when the ancestor props are wrappers", () => {
-    const host = setPage("Core Architecture");
+    setPage("Core Architecture");
     const currentMarkdown = [
       "# Core Architecture",
       "",
@@ -104,6 +104,37 @@ describe("extractDevinPageMarkdown", () => {
     attachFiber(document.querySelector("#page-host")!, hostFiber);
 
     expect(extractDevinPageMarkdown(document)).toBe(currentMarkdown);
+  });
+
+  it("anchors to the visible article when a cached route remains mounted", () => {
+    document.body.innerHTML = `
+      <section style="display: none">
+        <div id="cached" class="prose-main"><h1>Overview</h1><p>cached</p></div>
+      </section>
+      <main>
+        <div id="visible" class="prose-main"><h1>Glossary</h1><p>${"visible ".repeat(60)}</p></div>
+      </main>
+    `;
+    const cachedMarkdown = `# Overview\n\n${"Cached route content. ".repeat(20)}`;
+    const visibleMarkdown = [
+      "# Glossary",
+      "",
+      "Visible glossary source. ".repeat(10),
+      "",
+      "```mermaid",
+      "graph TD",
+      "  Term --> Definition",
+      "```",
+    ].join("\n");
+
+    attachFiber(document.querySelector("#cached")!, {
+      memoizedProps: { content: cachedMarkdown },
+    });
+    attachFiber(document.querySelector("#visible")!, {
+      memoizedProps: { nested: { content: visibleMarkdown } },
+    });
+
+    expect(extractDevinPageMarkdown(document)).toBe(visibleMarkdown);
   });
 
   it("rejects cached Markdown whose heading does not match the visible page", () => {
