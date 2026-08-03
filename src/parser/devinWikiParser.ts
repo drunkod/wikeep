@@ -169,7 +169,7 @@ export async function buildFullWikiFromDom(
   const originalHash = location.hash;
   const sections: string[] = [];
   const labels: string[] = [];
-  let usedFiber = false;
+  let fiberSectionCount = 0;
 
   for (const label of entryLabels) {
     const item = findOutlineItemByLabel(document, label);
@@ -190,7 +190,7 @@ export async function buildFullWikiFromDom(
       const fiber = await fetchSectionMarkdown();
       if (fiber && fiber.trim()) {
         md = fiber.trim();
-        usedFiber = true;
+        fiberSectionCount += 1;
       }
     }
     if (!md) {
@@ -203,13 +203,16 @@ export async function buildFullWikiFromDom(
     }
   }
 
-  // Restore the user's original location.
+  // Restore the user's original hash. Devin's SPA controls the current path;
+  // changing the hash is sufficient for legacy hash-based wiki routes.
   location.hash = originalHash;
 
   if (sections.length === 0) return null;
 
   const markdown = normalizeText(sections.join("\n\n---\n\n"));
   const repoFullName = `${parts.owner}/${parts.repo}`;
+  const allSectionsFromFiber =
+    !!fetchSectionMarkdown && fiberSectionCount === sections.length;
 
   return {
     url: withWikeepFullWikiHash(url),
@@ -219,11 +222,14 @@ export async function buildFullWikiFromDom(
     sectionPath: FULL_WIKI_SECTION_PATH,
     title: `${repoFullName} Full Wiki`,
     markdown,
-    markdownSource: usedFiber ? "fiber" : "dom",
+    // Do not mark a mixed snapshot as rich: one DOM fallback can still contain
+    // a lossy "Diagram omitted" placeholder even if other sections used fiber.
+    markdownSource: allSectionsFromFiber ? "fiber" : "dom",
     contentHash: stableHash(markdown),
     relatedSections: labels,
     wordCount: markdown.split(/\s+/).filter(Boolean).length,
-    hasDiagrams: /```mermaid/.test(markdown) || /data-wikeep-diagram/.test(markdown),
+    hasDiagrams:
+      /```\s*mermaid\b/i.test(markdown) || /Diagram omitted/i.test(markdown),
     capturedAt: Date.now(),
   };
 }
