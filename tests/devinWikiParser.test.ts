@@ -51,6 +51,10 @@ function setupDirectShadcnDOM(): Document {
   return document;
 }
 
+function currentHeading(): string {
+  return document.querySelector(".prose-main h1")?.textContent?.trim() ?? "";
+}
+
 describe("buildFullWikiFromDom", () => {
   it("compiles legacy wrapped outline sections and excludes controls", async () => {
     const doc = setupLegacyWrappedDOM();
@@ -79,5 +83,74 @@ describe("buildFullWikiFromDom", () => {
       "Getting Started: Installation and Setup",
     ]);
     expect(snap!.url).toBe(`${url}#wikeep-full-wiki`);
+  });
+
+  it("keeps Mermaid source when every Devin section is read from fiber", async () => {
+    const doc = setupDirectShadcnDOM();
+    const markdownByHeading: Record<string, string> = {
+      Overview: [
+        "# Overview",
+        "",
+        "Repository overview and execution flow. ".repeat(5),
+      ].join("\n"),
+      "Getting Started: Installation and Setup": [
+        "# Getting Started: Installation and Setup",
+        "",
+        "Installation details and the setup lifecycle. ".repeat(4),
+        "",
+        "```mermaid",
+        "flowchart LR",
+        "  Install --> Configure --> Run",
+        "```",
+      ].join("\n"),
+    };
+
+    const snap = await buildFullWikiFromDom(
+      doc,
+      "https://app.devin.ai/org/s/wiki/drunkod/repo-harness/page/10?branch=main",
+      async () => markdownByHeading[currentHeading()] ?? null,
+    );
+
+    expect(snap).not.toBeNull();
+    expect(snap!.markdownSource).toBe("fiber");
+    expect(snap!.markdown).toContain("```mermaid");
+    expect(snap!.markdown).toContain("Install --> Configure --> Run");
+    expect(snap!.markdown).not.toContain("Diagram omitted");
+    expect(snap!.hasDiagrams).toBe(true);
+  });
+
+  it("marks a mixed fiber and DOM full wiki as lossy", async () => {
+    document.body.innerHTML = `
+      <div data-slot="sidebar-content">
+        <button data-slot="sidebar-menu-button" aria-label="Overview"></button>
+        <button data-slot="sidebar-menu-button" aria-label="Architecture"></button>
+      </div>
+      <main><div class="prose-main"><h1>Overview</h1><p>${"overview ".repeat(60)}</p></div></main>
+    `;
+    const prose = document.querySelector(".prose-main")!;
+    document
+      .querySelector('[aria-label="Overview"]')
+      ?.addEventListener("click", () => {
+        prose.innerHTML = `<h1>Overview</h1><p>${"overview ".repeat(60)}</p>`;
+      });
+    document
+      .querySelector('[aria-label="Architecture"]')
+      ?.addEventListener("click", () => {
+        prose.innerHTML = `<h1>Architecture</h1><p>${"architecture ".repeat(60)}</p><figure><svg width="400" height="300"><rect /></svg></figure>`;
+      });
+
+    const snap = await buildFullWikiFromDom(
+      document,
+      "https://app.devin.ai/org/s/wiki/drunkod/repo-harness",
+      async () =>
+        currentHeading() === "Overview"
+          ? `# Overview\n\n${"Rich overview source. ".repeat(10)}`
+          : null,
+    );
+
+    expect(snap).not.toBeNull();
+    expect(snap!.markdownSource).toBe("dom");
+    expect(snap!.markdown).toContain("Diagram omitted");
+    expect(snap!.hasDiagrams).toBe(true);
   });
 });
