@@ -26,8 +26,18 @@ export function captureRscMessages(): void {
 }
 
 // --- Devin MAIN-world Markdown probe ---------------------------------------
+type DevinProbeResult = {
+  responded: boolean;
+  markdown: string | null;
+};
+
+type DevinPendingRequest = {
+  url: string;
+  resolve: (result: DevinProbeResult) => void;
+};
+
 let devinReqSeq = 0;
-const devinPending = new Map<number, (markdown: string | null) => void>();
+const devinPending = new Map<number, DevinPendingRequest>();
 let devinListenerRegistered = false;
 
 export function captureDevinMessages(): void {
@@ -38,16 +48,24 @@ export function captureDevinMessages(): void {
     const data = e.data as {
       source?: string;
       requestId?: number;
+      url?: string;
       markdown?: string | null;
     };
     if (
       data?.source === "wikeep-devin-md" &&
       typeof data.requestId === "number"
     ) {
-      const cb = devinPending.get(data.requestId);
-      if (cb) {
+      const pending = devinPending.get(data.requestId);
+      if (pending) {
         devinPending.delete(data.requestId);
-        cb(data.markdown ?? null);
+        pending.resolve({
+          responded: true,
+          // Reject a response captured after the SPA moved to another section.
+          markdown:
+            !data.url || data.url === pending.url
+              ? (data.markdown ?? null)
+              : null,
+        });
       }
     }
   });
@@ -55,18 +73,22 @@ export function captureDevinMessages(): void {
   devinListenerRegistered = true;
 }
 
-/** Ask the MAIN-world probe for the current Devin page's raw Markdown. */
-export function requestDevinMarkdown(timeoutMs = 2000): Promise<string | null> {
+function requestDevinMarkdownOnce(timeoutMs: number): Promise<DevinProbeResult> {
   const requestId = ++devinReqSeq;
+  const requestUrl = location.href;
+
   return new Promise((resolve) => {
     const timer = window.setTimeout(() => {
       devinPending.delete(requestId);
-      resolve(null);
+      resolve({ responded: false, markdown: null });
     }, timeoutMs);
 
-    devinPending.set(requestId, (markdown) => {
-      window.clearTimeout(timer);
-      resolve(markdown);
+    devinPending.set(requestId, {
+      url: requestUrl,
+      resolve: (result) => {
+        window.clearTimeout(timer);
+        resolve(result);
+      },
     });
 
     window.postMessage(
@@ -74,6 +96,33 @@ export function requestDevinMarkdown(timeoutMs = 2000): Promise<string | null> {
       location.origin,
     );
   });
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+/**
+ * Ask the MAIN-world probe for the current Devin page's raw Markdown.
+ *
+ * A newly-selected SPA section can expose its h1 before React has committed the
+ * renderer props that contain the original Markdown. Null responses are retried
+ * briefly; a complete timeout means the MAIN-world probe is unavailable, so we
+ * stop immediately instead of waiting repeatedly for every full-wiki section.
+ */
+export async function requestDevinMarkdown(
+  timeoutMs = 2000,
+): Promise<string | null> {
+  const attempts = 4;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const result = await requestDevinMarkdownOnce(timeoutMs);
+    if (!result.responded) return null;
+    if (result.markdown?.trim()) return result.markdown;
+    if (attempt < attempts - 1) {
+      await delay(150 * (attempt + 1));
+    }
+  }
+  return null;
 }
 
 async function waitForRscRaw(timeoutMs = 1200): Promise<string | null> {
