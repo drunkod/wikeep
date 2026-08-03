@@ -50,6 +50,54 @@ function findFiber(element: Element | null): DevinFiber | null {
   return null;
 }
 
+function isHidden(element: Element, doc: Document): boolean {
+  let current: Element | null = element;
+  while (current) {
+    if (
+      current.hasAttribute("hidden") ||
+      current.getAttribute("aria-hidden") === "true"
+    ) {
+      return true;
+    }
+
+    const view = doc.defaultView;
+    if (view) {
+      const style = view.getComputedStyle(current);
+      if (
+        style.display === "none" ||
+        style.visibility === "hidden" ||
+        style.visibility === "collapse"
+      ) {
+        return true;
+      }
+    }
+    current = current.parentElement;
+  }
+  return false;
+}
+
+function hostScore(element: Element): number {
+  const textLength = (element.textContent ?? "").trim().length;
+  const headingBonus = element.querySelector("h1") ? 100_000 : 0;
+  const rect = element.getBoundingClientRect();
+  const renderedBonus = rect.width > 0 || rect.height > 0 ? 1_000_000 : 0;
+  return renderedBonus + headingBonus + textLength;
+}
+
+/** Pick the visible article when Devin keeps cached routes mounted. */
+function findContentHost(doc: Document): Element | null {
+  const primary = Array.from(doc.querySelectorAll(".prose-main"));
+  const candidates =
+    primary.length > 0
+      ? primary
+      : Array.from(doc.querySelectorAll('[class*="prose"]'));
+  if (candidates.length === 0) return null;
+
+  const visible = candidates.filter((candidate) => !isHidden(candidate, doc));
+  const pool = visible.length > 0 ? visible : candidates;
+  return pool.sort((a, b) => hostScore(b) - hostScore(a))[0] ?? null;
+}
+
 export function normalizeDevinHeading(value: string): string {
   // eslint-disable-next-line no-control-regex
   return value
@@ -244,9 +292,7 @@ function candidateRank(
  * which prevents a longer cached SPA route from being selected accidentally.
  */
 export function extractDevinPageMarkdown(doc: Document): string | null {
-  const host =
-    doc.querySelector(".prose-main") ??
-    doc.querySelector('[class*="prose"]');
+  const host = findContentHost(doc);
   if (!host) return null;
 
   const start = findFiber(host);
