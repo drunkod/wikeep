@@ -1,12 +1,15 @@
-import type { CapturePayload, Conversation } from "../shared/types";
-import { buildConversationId } from "../shared/utils";
-import { normalizeText } from "../shared/utils";
+import type {
+  CapturePayload,
+  Conversation,
+  ConversationSource,
+} from "../shared/types";
+import { buildConversationId, normalizeText } from "../shared/utils";
 
-export const CONVERSATION_SCHEMA_VERSION = 3;
+export const CONVERSATION_SCHEMA_VERSION = 4;
 
 export interface LegacyConversationRecord {
   id: string;
-  source?: "deepwiki";
+  source?: ConversationSource;
   title?: string;
   question?: string;
   summary?: string;
@@ -22,6 +25,22 @@ export function dedupeStrings(values: string[]): string[] {
   return Array.from(
     new Set(values.map((value) => normalizeText(value)).filter(Boolean)),
   );
+}
+
+export function inferConversationSource(
+  record: Pick<LegacyConversationRecord, "source" | "sourceUrl">,
+): ConversationSource {
+  if (record.source === "deepwiki" || record.source === "devin") {
+    return record.source;
+  }
+
+  try {
+    return new URL(record.sourceUrl).hostname === "app.devin.ai"
+      ? "devin"
+      : "deepwiki";
+  } catch {
+    return "deepwiki";
+  }
 }
 
 export function resolveConversationQuestion(snapshot: CapturePayload): string {
@@ -49,14 +68,14 @@ export function normalizeConversation(
 
   return {
     id: record.id,
-    source: "deepwiki",
+    source: inferConversationSource(record),
     question: question || "Unrecognized question",
     sourceUrl: record.sourceUrl,
     sourceSessionId: record.sourceSessionId,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     metadata: repoNames.length > 0 ? { repoNames } : undefined,
-    schemaVersion: record.schemaVersion ?? CONVERSATION_SCHEMA_VERSION,
+    schemaVersion: CONVERSATION_SCHEMA_VERSION,
   };
 }
 
@@ -78,7 +97,7 @@ export function buildConversationFromSnapshot(
 
   return {
     id: conversationId,
-    source: "deepwiki",
+    source: snapshot.source,
     question,
     sourceUrl: snapshot.sourceUrl,
     sourceSessionId: snapshot.sourceSessionId,
