@@ -1,11 +1,7 @@
-import { sanitizeFilename } from "../export/markdown/shared";
-import { exportSessionMarkdown } from "../export/markdown/session";
-import { exportWikiMarkdown } from "../export/markdown/wiki";
 import type { RuntimeCommand, RuntimeResponse } from "./messages";
 import { normalizeText } from "./text";
-import type { Conversation, Message, WikiPage } from "./types";
 
-export { normalizeText, sanitizeFilename };
+export { normalizeText };
 
 export function clipText(value: string, maxLength: number): string {
   if (value.length <= maxLength) {
@@ -68,29 +64,6 @@ export function ensureErrorMessage(error: unknown): string {
   }
 
   return String(error);
-}
-
-/** @deprecated Use exportSessionMarkdown from export/markdown/session. */
-export function formatConversationAsMarkdown(
-  conversation: Conversation,
-  messages: Message[],
-): string {
-  return exportSessionMarkdown(conversation, messages).markdown;
-}
-
-/** @deprecated Use exportSessionMarkdown from export/markdown/session. */
-export function buildMarkdownFilename(conversation: Conversation): string {
-  return exportSessionMarkdown(conversation, []).filename;
-}
-
-/** @deprecated Use exportWikiMarkdown from export/markdown/wiki. */
-export function formatWikiPageAsMarkdown(page: WikiPage): string {
-  return exportWikiMarkdown(page).markdown;
-}
-
-/** @deprecated Use exportWikiMarkdown from export/markdown/wiki. */
-export function buildWikiPageMarkdownFilename(page: WikiPage): string {
-  return exportWikiMarkdown(page).filename;
 }
 
 export function debounce<A extends unknown[]>(
