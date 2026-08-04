@@ -80,6 +80,11 @@ describe("conversation source migration", () => {
 
   it("leaves a current record byte-for-byte unchanged", async () => {
     const db = await getDb();
+
+    // Duplicate metadata and unusual spacing are deliberate. This test covers
+    // only the current-schema skip path: pruneLegacyConversationData must not
+    // call normalizeConversation for this record. Legacy metadata normalization
+    // and deduplication are covered separately in conversationMapper.test.ts.
     const currentRecord = {
       id: "deepwiki:current-devin-session",
       source: "devin" as const,
