@@ -91,4 +91,25 @@ export const fixed = true;
     expect(markdown).not.toContain("secret trace");
     expect(markdown).not.toContain("Thinking process");
   });
+
+  it("preserves unrelated details adjacent to a Thinking-process block", () => {
+    const legacyAssistant: Message = {
+      ...messages[1],
+      content: [
+        "<details><summary>Implementation notes</summary>Keep this explanation.</details>",
+        "<details><summary><strong>Thinking process</strong> (2 tools used)</summary>remove this trace</details>",
+        "Visible answer.",
+      ].join("\n\n"),
+    };
+
+    const markdown = devinSessionExporter.export(conversation, [
+      legacyAssistant,
+    ]).markdown;
+
+    expect(markdown).toContain("Implementation notes");
+    expect(markdown).toContain("Keep this explanation.");
+    expect(markdown).toContain("Visible answer.");
+    expect(markdown).not.toContain("remove this trace");
+    expect(markdown).not.toContain("Thinking process");
+  });
 });
