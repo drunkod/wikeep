@@ -5,7 +5,7 @@ import {
 } from "../src/storage/conversationMapper";
 
 describe("conversationMapper", () => {
-  it("infers Devin source while normalizing legacy records", () => {
+  it("infers Devin source and deduplicates legacy repository metadata", () => {
     const conversation = normalizeConversation({
       id: "c1",
       title: "  Build   System  ",
