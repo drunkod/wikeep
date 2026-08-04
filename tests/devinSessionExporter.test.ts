@@ -53,6 +53,7 @@ describe("devinSessionExporter", () => {
 - **Repository**: drunkod/repo-harness
 - **Source**: https://app.devin.ai/search/devin-session
 - **Saved at**: ${savedAt}
+- **Platform**: Devin
 
 ---
 
@@ -73,5 +74,21 @@ export const fixed = true;
 ---
 `,
     });
+  });
+
+  it("removes legacy Devin Thinking-process details at export time", () => {
+    const legacyAssistant: Message = {
+      ...messages[1],
+      content:
+        "<details><summary>Thinking process (3 tools used)</summary>secret trace</details>\n\nVisible answer.",
+    };
+
+    const markdown = devinSessionExporter.export(conversation, [
+      legacyAssistant,
+    ]).markdown;
+
+    expect(markdown).toContain("Visible answer.");
+    expect(markdown).not.toContain("secret trace");
+    expect(markdown).not.toContain("Thinking process");
   });
 });
