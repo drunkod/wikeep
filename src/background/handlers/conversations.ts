@@ -44,6 +44,7 @@ export async function captureViaApi(
   const { snapshot, pending } = buildCapturePayloadFromDeepWikiSession(
     session,
     payload.sourceUrl,
+    "deepwiki",
   );
   const apiTransformMs = getDurationMs(transformStartedAt);
   const persistStartedAt = performance.now();
