@@ -221,22 +221,27 @@ export async function clearAllData(): Promise<void> {
   await clearAllWikiPages();
 }
 
+/**
+ * Upgrade legacy conversation records without touching their messages.
+ *
+ * This function is intentionally safe to run on every service-worker startup:
+ * current records are skipped, old records are normalized once, and the
+ * messages store is never opened or cleared.
+ */
 export async function pruneLegacyConversationData(): Promise<void> {
   const db = await getDb();
-  const transaction = db.transaction(
-    ["conversations", "messages"],
-    "readwrite",
-  );
+  const transaction = db.transaction("conversations", "readwrite");
   const conversationStore = transaction.objectStore("conversations");
   const records = await conversationStore.getAll();
 
   for (const record of records) {
-    await conversationStore.put(
-      normalizeConversation(record as LegacyConversationRecord),
-    );
+    const legacy = record as LegacyConversationRecord;
+    if ((legacy.schemaVersion ?? 0) >= CONVERSATION_SCHEMA_VERSION) {
+      continue;
+    }
+    await conversationStore.put(normalizeConversation(legacy));
   }
 
-  await transaction.objectStore("messages").clear();
   await transaction.done;
 }
 
