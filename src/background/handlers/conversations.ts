@@ -3,6 +3,7 @@ import {
   fetchDeepWikiSession,
 } from "../../api/deepwikiApi";
 import type { DeepWikiQuerySession } from "../../api/deepwikiTypes";
+import { exportSessionMarkdown } from "../../export/markdown/session";
 import type {
   CaptureDeepWikiSessionPayload,
   CaptureDomSnapshotPayload,
@@ -10,10 +11,6 @@ import type {
   ExportConversationMarkdownResult,
 } from "../../shared/messages";
 import type { CaptureResult } from "../../shared/types";
-import {
-  buildMarkdownFilename,
-  formatConversationAsMarkdown,
-} from "../../shared/utils";
 import {
   deleteConversation,
   getConversationDetail,
@@ -128,8 +125,5 @@ export async function exportMarkdown(
   }
 
   const messages = await getConversationMessages(payload.conversationId);
-  const markdown = formatConversationAsMarkdown(detail.conversation, messages);
-  const filename = buildMarkdownFilename(detail.conversation);
-
-  return { markdown, filename };
+  return exportSessionMarkdown(detail.conversation, messages);
 }
