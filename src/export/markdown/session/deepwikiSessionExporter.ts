@@ -6,6 +6,7 @@ export const deepwikiSessionExporter: SessionMarkdownExporter = {
     return renderSessionMarkdown(conversation, messages, {
       sourceLabel: "deepwiki",
       includeMessageSources: true,
+      extraMetadataLines: () => ["- **Platform**: DeepWiki"],
     });
   },
 };
