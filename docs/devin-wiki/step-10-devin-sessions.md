@@ -1,49 +1,109 @@
-# Step 10 — Save Devin sessions (`app.devin.ai/search/*`)
+# Step 10 — Save complete Devin sessions (`app.devin.ai/search/*`)
 
 ## Goal
 
-Capture Ask/search conversations on `app.devin.ai/search/<queryId>`, the same
-way DeepWiki sessions are captured.
+Capture the complete visible conversation on `app.devin.ai/search/<queryId>`:
 
-## Findings (verified live)
+- every user request,
+- every assistant answer,
+- Markdown structure,
+- fenced code examples,
+- repository metadata and source citations.
 
-- The page loads its session from **`https://app.devin.ai/api/ada/query/<queryId>`**
-  (not DeepWiki's public `api.devin.ai/ada/query/...`).
-- The response shape is **identical** to `DeepWikiQuerySession` (`title`,
-  `queries[]` with `user_query`, `repo_names`, `response[]` chunk/reference/
-  thoughts events, `state`), so the existing parser
-  `buildCapturePayloadFromDeepWikiSession` works unchanged.
-- The endpoint is **authenticated**: it needs `Authorization: Bearer <token>`
-  and `x-cog-org-id: <orgId>`. Both are in the page's `localStorage`:
-  - token: `JSON.parse(localStorage["auth1_session"]).token`
-  - orgId: first `org-<32hex>` found across localStorage keys/values.
-- A fetch with those headers returned `200` from the page context.
+This change is intentionally limited to **Devin session capture**. Wiki-page
+capture, DeepWiki session capture, persistence schema, search, side-panel UI,
+backup/restore, and Markdown export formatting are unchanged.
 
-## Changes
+## Findings
 
-| File | Change |
+- The page loads session metadata from
+  **`https://app.devin.ai/api/ada/query/<queryId>`**.
+- The endpoint is authenticated and needs `Authorization: Bearer <token>` and,
+  when available, `x-cog-org-id: <orgId>` from the page's `localStorage`.
+- The response resembles `DeepWikiQuerySession`, but it is **not always a
+  complete rendering transcript**. The current Devin UI can display a finished
+  assistant answer even when that answer is absent from the API events handled
+  as `type: "chunk"`.
+- The original implementation trusted the API snapshot completely. On “Save
+  again”, `upsertCapturedSession` correctly replaced the old message set with
+  the new snapshot, but the new snapshot could contain the follow-up user
+  request without its visible assistant answer.
+- Rendered assistant HTML is the reliable fallback for what the user actually
+  sees. Converting that HTML with the existing Turndown/GFM converter preserves
+  headings, lists, inline code, tables, and `<pre><code>` blocks as fenced
+  Markdown.
+
+## Corrected capture architecture
+
+| File | Responsibility |
 |---|---|
-| `src/api/deepwikiApi.ts` | `extractQueryIdFromUrl` accepts `app.devin.ai` too. New `fetchDevinSession(queryId, {token, orgId})` → `app.devin.ai/api/ada/query/<id>` with auth headers. |
-| `src/content/index.ts` | `readDevinAuth()` reads token/org from localStorage; `captureDevinSession()` fetches + builds the snapshot and persists via `CAPTURE_DOM_SNAPSHOT`. `captureSession` branches on host. |
-| `public/manifest.json` | Add `https://app.devin.ai/search/*` to the `content.js` matches. |
-| `src/shared/utils.ts` | Session filename is source-aware: `wikeep-devin-session-…` for Devin, `wikeep-deepwiki-session-…` otherwise. |
+| `src/api/deepwikiApi.ts` | Fetch the authenticated Devin session and build the API snapshot. This remains authoritative for title, stable message IDs, repositories, citations, response metadata, and pending state. |
+| `src/parser/devinSessionDomParser.ts` | Match rendered turns to API user requests, extract the visible assistant answer, remove controls and the collapsed Thinking-process UI, convert rendered HTML to Markdown, include missing `<pre><code>` blocks, and merge the richer answer with API metadata. |
+| `src/content/index.ts` | Enrich only Devin session snapshots before `CAPTURE_DOM_SNAPSHOT`. If a finished query still has no captured assistant answer, do not overwrite the saved transcript; ask the user to reload and save again. |
+| `src/parser/htmlToMarkdown.ts` | Existing converter used unchanged. Its fenced-code rule preserves code examples and language identifiers. |
+| `src/storage/conversationRepository.ts` | Existing replacement semantics used unchanged. It now receives a complete Devin snapshot instead of an API-only partial snapshot. |
+| `src/shared/utils.ts` | Existing Markdown export used unchanged; it writes all stored user and assistant messages in order. |
 
-## Why fetch in the content script (not the background)
+## Why API + DOM instead of DOM only
 
-The token lives in the page's `localStorage`, which the background worker can't
-read. The content script can (localStorage is shared with the isolated world),
-the request is same-origin (`app.devin.ai` → `app.devin.ai/api`), and
-`app.devin.ai/*` is already in `host_permissions`. The built snapshot is handed
-to the existing `captureViaDom` path for storage — no new storage code.
+The API provides durable identity and metadata that the rendered page may not
+expose consistently. The DOM provides the final content visible to the user.
+Merging the two keeps stable IDs/citations while ensuring that the saved session
+matches the screen.
 
-## Result
+The API answer is retained when it is richer. The DOM answer wins when it:
 
-- Source citations render via Step 9's `**Sources:**` block (Devin returns the
-  same `reference` events).
-- Export name: `wikeep-devin-session-drunkod_nix-config-1-please-create-arch-…-<date>.md`.
+- supplies an answer missing from the API,
+- contains fenced code that the API answer lacks,
+- contains the complete API text plus additional rendered content, or
+- is otherwise the longer complete representation.
 
-## Verify
+## Safety against destructive recapture
 
-- `npm run build`, reload, open an `app.devin.ai/search/...` page.
-- Panel should show the session as supported (no longer "Not a DeepWiki page").
-- Capture; confirm the conversation, mermaid diagram, and Sources are saved.
+A finished Devin query is expected to have one saved assistant answer. If the
+API omits it and the DOM has not rendered a capturable answer yet, capture stops
+before persistence. This matters because session persistence intentionally
+replaces the previous message set on each recapture; refusing an incomplete
+finished snapshot preserves the previously saved complete record.
+
+Pending sessions continue through the existing polling flow and are retried as
+the answer renders.
+
+## Automated verification
+
+```bash
+nix develop -c npx vitest run \
+  tests/deepwikiApi.test.ts \
+  tests/devinSessionDomParser.test.ts \
+  tests/conversationRepository.test.ts
+nix develop -c npm run typecheck
+nix develop -c npm run build
+```
+
+The regression tests cover:
+
+- an API snapshot containing only the user request,
+- recovery of the visible assistant answer,
+- fenced TypeScript/Bash code preservation,
+- code displayed beside the prose answer,
+- multiple-turn alignment by user text,
+- retention of API citations and message IDs,
+- removal of stray control characters,
+- refusal to invent or silently save a missing finished answer.
+
+## Manual verification
+
+1. Build and reload the unpacked extension.
+2. Hard-reload the `app.devin.ai/search/...` tab so the new content script is
+   injected.
+3. Wait until the assistant answer is fully visible.
+4. Click **Save again**.
+5. Export the session Markdown.
+
+Expected result:
+
+- each user request is followed by its assistant answer,
+- headings and lists remain Markdown,
+- visible code examples appear inside fenced code blocks,
+- the exported file no longer ends after the user's follow-up request,
+- collapsed Thinking-process/tool-trace content is not exported.
