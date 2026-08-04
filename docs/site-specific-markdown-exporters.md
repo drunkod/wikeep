@@ -51,7 +51,7 @@ src/export/markdown/
 
 `shared.ts` owns only platform-neutral mechanics:
 
-- filename sanitization;
+- filename sanitization with explicit `session` and `wiki` fallbacks;
 - role headings and separators;
 - saved-date formatting;
 - citation deduplication/rendering;
@@ -67,6 +67,20 @@ exportWikiMarkdown(page)
 
 They do not infer a site from a URL and do not know filename or metadata rules.
 
+## Session transform contract
+
+A session policy may define `transformMessageContent`. The hook:
+
+1. receives already-normalized stored content;
+2. returns final Markdown content;
+3. is trimmed only at the outer boundary;
+4. is not normalized a second time, so intentional internal whitespace is
+   preserved;
+5. omits the message when it returns only whitespace.
+
+This keeps site transforms predictable and prevents a shared post-processing
+step from silently rewriting formatting introduced by a site policy.
+
 ## Current site policies
 
 ### DeepWiki sessions
@@ -80,9 +94,12 @@ They do not infer a site from a URL and do not know filename or metadata rules.
 - filename prefix: `wikeep-devin-session-`;
 - explicit `Platform: Devin` metadata;
 - rendered fenced code remains unchanged;
-- a defensive exporter rule removes legacy raw `<details>` blocks containing a
-  Devin Thinking-process trace. The primary omission still happens during Devin
-  DOM capture.
+- a defensive exporter rule removes legacy raw `<details>` blocks only when the
+  block's immediate `<summary>` contains `Thinking process`;
+- each `<details>` block is inspected independently, so adjacent implementation
+  notes or other legitimate disclosures are preserved.
+
+The primary Thinking-process omission still happens during Devin DOM capture.
 
 ### DeepWiki wiki pages
 
@@ -103,6 +120,8 @@ They do not infer a site from a URL and do not know filename or metadata rules.
 `pruneLegacyConversationData()` is idempotent and conversation-only:
 
 - it updates only records older than the current conversation schema;
+- it infers both Devin and DeepWiki legacy records from the URL host;
+- it skips current records without normalizing or rewriting them;
 - it never opens, clears, or rewrites the messages store;
 - it is safe when the Manifest V3 service worker starts repeatedly.
 
@@ -111,7 +130,7 @@ routine worker initialization.
 
 ## Tests
 
-Golden tests lock complete Markdown output separately for each site:
+Golden and contract tests lock behavior separately for each site:
 
 ```text
 tests/deepwikiSessionExporter.test.ts
@@ -119,12 +138,25 @@ tests/devinSessionExporter.test.ts
 tests/deepwikiWikiExporter.test.ts
 tests/devinWikiExporter.test.ts
 tests/markdownExporterRegistry.test.ts
+tests/markdownShared.test.ts
 tests/conversationSourceMigration.test.ts
 ```
 
+Coverage includes:
+
+- complete source-specific Markdown output;
+- one exporter for every persisted source;
+- preservation of internal whitespace returned by a site transform;
+- intentional omission for whitespace-only transformed content;
+- content-type-specific filename fallbacks;
+- preservation of unrelated `<details>` blocks next to Devin Thinking-process
+  markup;
+- Devin and DeepWiki legacy source inference;
+- byte-for-byte preservation of current conversation records;
+- message survival across repeated startup migrations.
+
 A policy update should modify only its site exporter and its corresponding
-golden fixture. The registry test ensures every persisted source has exactly one
-exporter.
+golden fixture.
 
 ## Verification
 
@@ -138,7 +170,8 @@ nix develop -c npx vitest run \
   tests/devinSessionExporter.test.ts \
   tests/deepwikiWikiExporter.test.ts \
   tests/devinWikiExporter.test.ts \
-  tests/markdownExporterRegistry.test.ts
+  tests/markdownExporterRegistry.test.ts \
+  tests/markdownShared.test.ts
 nix develop -c npm run typecheck
 nix develop -c npm run build
 ```
