@@ -172,7 +172,9 @@ function findLegacyAnswerElement(root: HTMLElement): HTMLElement | null {
 }
 
 function follows(left: Node, right: Node): boolean {
-  return Boolean(left.compareDocumentPosition(right) & Node.DOCUMENT_POSITION_FOLLOWING);
+  return Boolean(
+    left.compareDocumentPosition(right) & Node.DOCUMENT_POSITION_FOLLOWING,
+  );
 }
 
 function findAssistantElement(
@@ -188,7 +190,10 @@ function findAssistantElement(
     root.querySelectorAll<HTMLElement>(ASSISTANT_SELECTOR),
   ).filter((element) => {
     if (!isVisible(element) || element === root) return false;
-    if (userElement && (element.contains(userElement) || !follows(userElement, element))) {
+    if (
+      userElement &&
+      (element.contains(userElement) || !follows(userElement, element))
+    ) {
       return false;
     }
     return elementText(element).length > 0;
@@ -330,9 +335,7 @@ function sanitizeAssistantRoot(root: HTMLElement): HTMLElement {
   return clone;
 }
 
-function cloneRangeAfterUser(
-  match: DomTurnMatch,
-): HTMLElement | null {
+function cloneRangeAfterUser(match: DomTurnMatch): HTMLElement | null {
   if (!match.userElement) return null;
 
   try {
@@ -366,9 +369,9 @@ function appendMissingCodeBlocks(
     const text = cleanSessionText(pre.textContent ?? "");
     if (!text || markdown.includes(text)) continue;
 
-    const converted = cleanSessionText(
-      elementToMarkdown(sanitizeAssistantRoot(pre)),
-    );
+    const wrapper = turnRoot.ownerDocument.createElement("div");
+    wrapper.append(sanitizeAssistantRoot(pre));
+    const converted = cleanSessionText(elementToMarkdown(wrapper));
     if (converted && !blocks.includes(converted)) blocks.push(converted);
   }
 
@@ -393,7 +396,9 @@ function extractAssistantMarkdown(match: DomTurnMatch): string {
 function plainMarkdownText(value: string): string {
   return comparableText(
     value
-      .replace(/```[\s\S]*?```/g, (block) => block.replace(/```[^\n]*\n?|```/g, ""))
+      .replace(/```[\s\S]*?```/g, (block) =>
+        block.replace(/```[^\n]*\n?|```/g, ""),
+      )
       .replace(/[`*_>#-]/g, " "),
   );
 }
