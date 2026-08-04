@@ -119,7 +119,11 @@ async function captureDevinSession(queryId: string): Promise<CaptureResult> {
 
   const session = await fetchDevinSession(queryId, auth);
   const { snapshot: apiSnapshot, pending } =
-    buildCapturePayloadFromDeepWikiSession(session, window.location.href);
+    buildCapturePayloadFromDeepWikiSession(
+      session,
+      window.location.href,
+      "devin",
+    );
   const completedTurnCount = session.queries.filter(
     (query) =>
       !!stripRelevantContext(query.user_query) &&
