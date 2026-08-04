@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { parseDeepWikiDomSnapshot } from '../src/parser/deepwikiDomParser';
+import { describe, expect, it } from "vitest";
+import { parseDeepWikiDomSnapshot } from "../src/parser/deepwikiDomParser";
 
-describe('deepwikiDomParser', () => {
-  it('parses query display sections into user and assistant messages', () => {
-    document.title = 'Example Session | DeepWiki';
+describe("deepwikiDomParser", () => {
+  it("parses query display sections into user and assistant messages", () => {
+    document.title = "Example Session | DeepWiki";
     document.body.innerHTML = `
       <div data-query-display id="1">
         <div>
@@ -33,14 +33,17 @@ describe('deepwikiDomParser', () => {
 
     const snapshot = parseDeepWikiDomSnapshot(
       document,
-      'https://deepwiki.com/search/ragflowadmin_f49fa6f1-7111-4b98-826a-03c5c21742ce'
+      "https://deepwiki.com/search/ragflowadmin_f49fa6f1-7111-4b98-826a-03c5c21742ce",
     );
 
     expect(snapshot).not.toBeNull();
-    expect(snapshot?.sourceSessionId).toBe('ragflowadmin_f49fa6f1-7111-4b98-826a-03c5c21742ce');
+    expect(snapshot?.source).toBe("deepwiki");
+    expect(snapshot?.sourceSessionId).toBe(
+      "ragflowadmin_f49fa6f1-7111-4b98-826a-03c5c21742ce",
+    );
     expect(snapshot?.messages).toHaveLength(4);
-    expect(snapshot?.messages[0].content).toContain('第一个问题');
-    expect(snapshot?.messages[1].content).toContain('第一个回答');
-    expect(snapshot?.title).toBe('Example Session');
+    expect(snapshot?.messages[0].content).toContain("第一个问题");
+    expect(snapshot?.messages[1].content).toContain("第一个回答");
+    expect(snapshot?.title).toBe("Example Session");
   });
 });
