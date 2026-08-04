@@ -39,6 +39,8 @@ describe("deepwikiWikiExporter", () => {
 - **Section**: 1.1-structure
 - **Indexed commit**: abc123
 - **Saved at**: ${savedAt}
+- **Platform**: DeepWiki
+- **Capture source**: RSC stream
 
 ---
 
