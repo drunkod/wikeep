@@ -10,9 +10,9 @@ Capture the complete visible conversation on `app.devin.ai/search/<queryId>`:
 - fenced code examples,
 - repository metadata and source citations.
 
-This change is intentionally limited to **Devin session capture**. Wiki-page
-capture, DeepWiki session capture, persistence schema, search, side-panel UI,
-backup/restore, and Markdown export formatting are unchanged.
+The capture correction remains limited to **Devin sessions**. A later exporter
+refactor gives Devin and DeepWiki separate Markdown policy modules without
+changing the session capture algorithm described here.
 
 ## Findings
 
@@ -37,12 +37,16 @@ backup/restore, and Markdown export formatting are unchanged.
 
 | File | Responsibility |
 |---|---|
-| `src/api/deepwikiApi.ts` | Fetch the authenticated Devin session and build the API snapshot. This remains authoritative for title, stable message IDs, repositories, citations, response metadata, and pending state. |
+| `src/api/deepwikiApi.ts` | Fetch the authenticated Devin session and build a snapshot explicitly tagged with `source: "devin"`. The API remains authoritative for title, stable message IDs, repositories, citations, response metadata, and pending state. |
 | `src/parser/devinSessionDomParser.ts` | Match rendered turns to API user requests, extract the visible assistant answer, remove controls and the collapsed Thinking-process UI, convert rendered HTML to Markdown, include missing `<pre><code>` blocks, and merge the richer answer with API metadata. |
 | `src/content/index.ts` | Enrich only Devin session snapshots before `CAPTURE_DOM_SNAPSHOT`. If a finished query still has no captured assistant answer, do not overwrite the saved transcript; ask the user to reload and save again. |
 | `src/parser/htmlToMarkdown.ts` | Existing converter used unchanged. Its fenced-code rule preserves code examples and language identifiers. |
-| `src/storage/conversationRepository.ts` | Existing replacement semantics used unchanged. It now receives a complete Devin snapshot instead of an API-only partial snapshot. |
-| `src/shared/utils.ts` | Existing Markdown export used unchanged; it writes all stored user and assistant messages in order. |
+| `src/storage/conversationRepository.ts` | Existing replacement semantics receive a complete Devin snapshot instead of an API-only partial snapshot. Startup migration is now idempotent and never clears messages. |
+| `src/export/markdown/session/devinSessionExporter.ts` | Owns Devin Markdown policy, filename prefix, platform metadata, fenced-code pass-through, and defensive removal of legacy raw Thinking-process `<details>` blocks. |
+| `src/export/markdown/session/index.ts` | Dispatches by persisted `Conversation.source`; it never infers the site from a URL. |
+
+See [`../site-specific-markdown-exporters.md`](../site-specific-markdown-exporters.md)
+for the complete exporter architecture and DeepWiki isolation rules.
 
 ## Why API + DOM instead of DOM only
 
@@ -75,6 +79,8 @@ the answer renders.
 nix develop -c npx vitest run \
   tests/deepwikiApi.test.ts \
   tests/devinSessionDomParser.test.ts \
+  tests/devinSessionExporter.test.ts \
+  tests/conversationSourceMigration.test.ts \
   tests/conversationRepository.test.ts
 nix develop -c npm run typecheck
 nix develop -c npm run build
@@ -89,7 +95,8 @@ The regression tests cover:
 - multiple-turn alignment by user text,
 - retention of API citations and message IDs,
 - removal of stray control characters,
-- refusal to invent or silently save a missing finished answer.
+- refusal to invent or silently save a missing finished answer,
+- Devin-specific export routing and Thinking-process defense.
 
 ## Manual verification
 
@@ -105,5 +112,6 @@ Expected result:
 - each user request is followed by its assistant answer,
 - headings and lists remain Markdown,
 - visible code examples appear inside fenced code blocks,
+- the exported file includes `Platform: Devin`,
 - the exported file no longer ends after the user's follow-up request,
 - collapsed Thinking-process/tool-trace content is not exported.
