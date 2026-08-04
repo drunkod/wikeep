@@ -1,5 +1,6 @@
 export type MessageRole = "user" | "assistant" | "system" | "unknown";
 export type CaptureMethod = "api" | "dom";
+export type ConversationSource = "deepwiki" | "devin";
 
 export interface ConversationMetadata {
   repoNames?: string[];
@@ -20,7 +21,7 @@ export interface MessageMetadata {
 
 export interface Conversation {
   id: string;
-  source: "deepwiki";
+  source: ConversationSource;
   question: string;
   sourceUrl: string;
   sourceSessionId?: string;
@@ -63,6 +64,7 @@ export interface ParsedMessage {
 }
 
 export interface CapturePayload {
+  source: ConversationSource;
   title?: string;
   sourceUrl: string;
   sourceHost: string;
@@ -137,10 +139,11 @@ export type DeepWikiRouteKind = "session" | "wiki" | "other";
 
 export type WikiMarkdownSource = "rsc" | "dom" | "fiber";
 export type WikiPageKind = "page" | "full-wiki";
+export type WikiPageSource = "deepwiki-wiki" | "devin-wiki";
 
 export interface WikiPage {
   id: string;
-  source: "deepwiki-wiki" | "devin-wiki";
+  source: WikiPageSource;
   kind?: WikiPageKind;
   owner: string;
   repo: string;
