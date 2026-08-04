@@ -1,10 +1,10 @@
+import { normalizeText } from "../../shared/text";
 import type {
   Conversation,
   Message,
   MessageCitation,
   WikiPage,
 } from "../../shared/types";
-import { normalizeText } from "../../shared/utils";
 
 export interface MarkdownExportResult {
   markdown: string;
