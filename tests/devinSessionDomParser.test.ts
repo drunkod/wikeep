@@ -62,6 +62,7 @@ describe("enrichDevinSessionSnapshotFromDom", () => {
               <details>
                 <summary>Thinking process (15 tools used)</summary>
                 <p>Private tool trace that must not be exported.</p>
+                <pre><code class="language-bash">secret-tool-call --do-not-export</code></pre>
               </details>
               <h2>Review of commit</h2>
               <p>The answer explains the architectural issue.</p>
@@ -96,6 +97,9 @@ describe("enrichDevinSessionSnapshotFromDom", () => {
     );
     expect(result.snapshot.messages[1].content).not.toContain(
       "Thinking process",
+    );
+    expect(result.snapshot.messages[1].content).not.toContain(
+      "secret-tool-call",
     );
     expect(result.snapshot.messages[1].content).not.toContain("Copy");
   });
