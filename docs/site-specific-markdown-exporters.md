@@ -96,8 +96,12 @@ step from silently rewriting formatting introduced by a site policy.
 - rendered fenced code remains unchanged;
 - a defensive exporter rule removes legacy raw `<details>` blocks only when the
   block's immediate `<summary>` contains `Thinking process`;
-- each `<details>` block is inspected independently, so adjacent implementation
-  notes or other legitimate disclosures are preserved.
+- a balanced `<details>` tag scan identifies complete nested blocks instead of
+  relying on a lazy block regex;
+- adjacent disclosures remain independent;
+- a nested Thinking-process block can be removed while preserving its parent;
+- an outer Thinking-process block containing nested disclosures is removed as a
+  complete unit without truncating following visible content.
 
 The primary Thinking-process omission still happens during Devin DOM capture.
 
@@ -125,6 +129,11 @@ The primary Thinking-process omission still happens during Devin DOM capture.
 - it never opens, clears, or rewrites the messages store;
 - it is safe when the Manifest V3 service worker starts repeatedly.
 
+The current-record migration test deliberately stores duplicate metadata and
+unusual spacing to prove the skip path is byte-for-byte non-mutating. Legacy
+metadata normalization and repository-name deduplication are tested separately
+in `tests/conversationMapper.test.ts`.
+
 This corrects the previous behavior that cleared all saved session messages on
 routine worker initialization.
 
@@ -140,6 +149,7 @@ tests/devinWikiExporter.test.ts
 tests/markdownExporterRegistry.test.ts
 tests/markdownShared.test.ts
 tests/conversationSourceMigration.test.ts
+tests/conversationMapper.test.ts
 ```
 
 Coverage includes:
@@ -149,9 +159,11 @@ Coverage includes:
 - preservation of internal whitespace returned by a site transform;
 - intentional omission for whitespace-only transformed content;
 - content-type-specific filename fallbacks;
-- preservation of unrelated `<details>` blocks next to Devin Thinking-process
-  markup;
+- preservation of unrelated adjacent and parent `<details>` blocks around Devin
+  Thinking-process markup;
+- complete removal of nested Thinking-process structures without truncation;
 - Devin and DeepWiki legacy source inference;
+- legacy repository metadata deduplication;
 - byte-for-byte preservation of current conversation records;
 - message survival across repeated startup migrations.
 
