@@ -1,4 +1,8 @@
-import type { CapturePayload, MessageCitation } from "../shared/types";
+import type {
+  CapturePayload,
+  ConversationSource,
+  MessageCitation,
+} from "../shared/types";
 import { normalizeText } from "../shared/utils";
 import type {
   DeepWikiChunkEvent,
@@ -161,6 +165,7 @@ export async function fetchDeepWikiSession(
 export function buildCapturePayloadFromDeepWikiSession(
   session: DeepWikiQuerySession,
   sourceUrl: string,
+  source: ConversationSource,
 ): { snapshot: CapturePayload; pending: boolean } {
   const sourceSessionId = extractQueryIdFromUrl(sourceUrl) ?? undefined;
   const sourceHost = new URL(sourceUrl).host;
@@ -222,6 +227,7 @@ export function buildCapturePayloadFromDeepWikiSession(
 
   return {
     snapshot: {
+      source,
       title,
       sourceUrl,
       sourceHost,
