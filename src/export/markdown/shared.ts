@@ -29,6 +29,12 @@ const ROLE_LABELS: Record<string, string> = {
 export interface SessionRenderPolicy {
   sourceLabel: "deepwiki" | "devin";
   extraMetadataLines?: (conversation: Conversation) => string[];
+  /**
+   * Receives normalized stored content and returns final Markdown content.
+   * The result is trimmed but is not normalized again, so a site policy may
+   * intentionally preserve internal whitespace. Returning only whitespace
+   * omits the message from the export.
+   */
   transformMessageContent?: (message: Message, content: string) => string;
   includeMessageSources?: boolean;
 }
@@ -39,13 +45,16 @@ export interface WikiRenderPolicy {
   extraMetadataLines?: (page: WikiPage) => string[];
 }
 
-export function sanitizeFilename(text: string): string {
+export function sanitizeFilename(
+  text: string,
+  fallback = "session",
+): string {
   return (
     text
       .replace(/[\\/:*?"<>|]/g, "_")
       .replace(/\s+/g, " ")
       .trim()
-      .slice(0, 50) || "session"
+      .slice(0, 50) || fallback
   );
 }
 
@@ -99,9 +108,10 @@ export function renderSessionMarkdown(
   for (const message of messages) {
     const role = ROLE_LABELS[message.role] ?? message.role;
     const normalized = normalizeText(message.content);
-    const content = policy.transformMessageContent
-      ? normalizeText(policy.transformMessageContent(message, normalized))
+    const transformed = policy.transformMessageContent
+      ? policy.transformMessageContent(message, normalized)
       : normalized;
+    const content = transformed.trim();
 
     if (!content) continue;
 
@@ -129,6 +139,7 @@ export function renderSessionMarkdown(
   const date = new Date(conversation.updatedAt).toISOString().slice(0, 10);
   const filename = `wikeep-${policy.sourceLabel}-session-${sanitizeFilename(
     segments.join("-"),
+    "session",
   )}-${date}.md`;
 
   return { markdown: lines.join("\n"), filename };
@@ -172,6 +183,7 @@ export function renderWikiMarkdown(
   const date = new Date(page.updatedAt).toISOString().slice(0, 10);
   const filename = `wikeep-${policy.sourceLabel}-${sanitizeFilename(
     segments.join("-"),
+    "wiki",
   )}-${date}.md`;
 
   return { markdown: lines.join("\n"), filename };
