@@ -359,6 +359,13 @@ function cloneRangeAfterUser(match: DomTurnMatch): HTMLElement | null {
   }
 }
 
+function isThinkingProcessContent(element: Element): boolean {
+  const details = element.closest("details");
+  if (!details) return false;
+  const summary = details.querySelector("summary");
+  return /thinking process/i.test(elementText(summary));
+}
+
 function appendMissingCodeBlocks(
   markdown: string,
   turnRoot: HTMLElement,
@@ -366,6 +373,15 @@ function appendMissingCodeBlocks(
   const blocks: string[] = [];
 
   for (const pre of turnRoot.querySelectorAll<HTMLElement>("pre")) {
+    const parentDetails = pre.closest("details");
+    if (
+      !isVisible(pre) ||
+      isThinkingProcessContent(pre) ||
+      (parentDetails && !parentDetails.hasAttribute("open"))
+    ) {
+      continue;
+    }
+
     const text = cleanSessionText(pre.textContent ?? "");
     if (!text || markdown.includes(text)) continue;
 
