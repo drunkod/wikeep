@@ -1,17 +1,11 @@
-import type {
-  Conversation,
-  Message,
-  MessageCitation,
-  WikiPage,
-} from "./types";
+import { sanitizeFilename } from "../export/markdown/shared";
+import { exportSessionMarkdown } from "../export/markdown/session";
+import { exportWikiMarkdown } from "../export/markdown/wiki";
 import type { RuntimeCommand, RuntimeResponse } from "./messages";
+import { normalizeText } from "./text";
+import type { Conversation, Message, WikiPage } from "./types";
 
-export function normalizeText(value: string): string {
-  return value
-    .replace(/\r\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
+export { normalizeText, sanitizeFilename };
 
 export function clipText(value: string, maxLength: number): string {
   if (value.length <= maxLength) {
@@ -35,6 +29,8 @@ export function buildConversationId(
   sourceSessionId: string | undefined,
   sourceUrl: string,
 ): string {
+  // Keep the historical prefix until an explicit ID + message-key migration is
+  // introduced. Source identity is stored independently on Conversation.
   return sourceSessionId
     ? `deepwiki:${sourceSessionId}`
     : `deepwiki:${stableHash(sourceUrl)}`;
@@ -74,148 +70,27 @@ export function ensureErrorMessage(error: unknown): string {
   return String(error);
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  user: "User",
-  assistant: "Assistant",
-  system: "System",
-  unknown: "Unknown",
-};
-
-export function sanitizeFilename(text: string): string {
-  return (
-    text
-      .replace(/[\\/:*?"<>|]/g, "_")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 50) || "session"
-  );
-}
-
+/** @deprecated Use exportSessionMarkdown from export/markdown/session. */
 export function formatConversationAsMarkdown(
   conversation: Conversation,
   messages: Message[],
 ): string {
-  const lines: string[] = [];
-  const question =
-    normalizeText(conversation.question) || "Unrecognized question";
-  const repoNames = conversation.metadata?.repoNames ?? [];
-
-  lines.push(`# ${question}`);
-  lines.push("");
-
-  if (repoNames.length > 0) {
-    lines.push(`- **Repository**: ${repoNames.join(", ")}`);
-  }
-
-  lines.push(`- **Source**: ${conversation.sourceUrl}`);
-  lines.push(
-    `- **Saved at**: ${new Date(conversation.updatedAt).toLocaleString("en-US")}`,
-  );
-  lines.push("");
-  lines.push("---");
-  lines.push("");
-
-  for (const message of messages) {
-    const role = ROLE_LABELS[message.role] ?? message.role;
-    const content = normalizeText(message.content);
-
-    if (!content) {
-      continue;
-    }
-
-    lines.push(`## ${role}`);
-    lines.push("");
-    lines.push(content);
-    lines.push("");
-
-    const sources = formatMessageSources(message.metadata?.citations);
-    if (sources.length > 0) {
-      lines.push("**Sources:**");
-      lines.push("");
-      lines.push(...sources);
-      lines.push("");
-    }
-
-    lines.push("---");
-    lines.push("");
-  }
-
-  return lines.join("\n");
+  return exportSessionMarkdown(conversation, messages).markdown;
 }
 
-/**
- * Render a message's source citations as Markdown lines in DeepWiki's style:
- * `path/to/File.js` [103-320]()
- */
-function formatMessageSources(
-  citations: MessageCitation[] | undefined,
-): string[] {
-  if (!citations || citations.length === 0) return [];
-
-  const seen = new Set<string>();
-  const lines: string[] = [];
-  for (const c of citations) {
-    if (!c.filePath) continue;
-    const key = `${c.filePath}:${c.rangeStart}-${c.rangeEnd}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    lines.push(`- \`${c.filePath}\` [${c.rangeStart}-${c.rangeEnd}]()`);
-  }
-  return lines;
-}
-
+/** @deprecated Use exportSessionMarkdown from export/markdown/session. */
 export function buildMarkdownFilename(conversation: Conversation): string {
-  // Match wiki-page naming with a "session" marker:
-  // wikeep-<source>-session-<repo>-<question>-<date>.md
-  const source = conversation.sourceUrl?.includes("app.devin.ai")
-    ? "devin"
-    : "deepwiki";
-  const repo = conversation.metadata?.repoNames?.[0];
-  const question = normalizeText(conversation.question) || "session";
-  const segments = repo ? [repo, question] : [question];
-  const date = new Date(conversation.updatedAt).toISOString().slice(0, 10);
-  return `wikeep-${source}-session-${sanitizeFilename(segments.join("-"))}-${date}.md`;
+  return exportSessionMarkdown(conversation, []).filename;
 }
 
+/** @deprecated Use exportWikiMarkdown from export/markdown/wiki. */
 export function formatWikiPageAsMarkdown(page: WikiPage): string {
-  const lines: string[] = [];
-  lines.push(`# ${normalizeText(page.title) || page.repoFullName}`);
-  lines.push("");
-  lines.push(`- **Repository**: ${page.repoFullName}`);
-  lines.push(`- **Source**: ${page.url}`);
-  if (page.sectionPath) {
-    lines.push(`- **Section**: ${page.sectionPath}`);
-  }
-  if (page.indexedCommit) {
-    lines.push(`- **Indexed commit**: ${page.indexedCommit}`);
-  }
-  lines.push(
-    `- **Saved at**: ${new Date(page.updatedAt).toLocaleString("en-US")}`,
-  );
-  lines.push("");
-  lines.push("---");
-  lines.push("");
-  lines.push(page.markdown.trim());
-  lines.push("");
-  return lines.join("\n");
+  return exportWikiMarkdown(page).markdown;
 }
 
+/** @deprecated Use exportWikiMarkdown from export/markdown/wiki. */
 export function buildWikiPageMarkdownFilename(page: WikiPage): string {
-  // Source label distinguishes deepwiki.com vs app.devin.ai exports.
-  const source = page.source === "devin-wiki" ? "devin" : "deepwiki";
-
-  const segments = [page.repoFullName];
-  // Devin section paths are bare numbers (e.g. "5.2"), so include the page
-  // title for readability. DeepWiki slugs already embed the title.
-  if (source === "devin" && page.kind !== "full-wiki" && page.title) {
-    segments.push(page.title);
-  }
-  if (page.sectionPath) {
-    segments.push(page.sectionPath);
-  }
-
-  const date = new Date(page.updatedAt).toISOString().slice(0, 10);
-  return `wikeep-${source}-${sanitizeFilename(segments.join("-"))}-${date}.md`;
+  return exportWikiMarkdown(page).filename;
 }
 
 export function debounce<A extends unknown[]>(
