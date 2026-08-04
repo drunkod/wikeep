@@ -144,9 +144,9 @@ export const fixed = true;
       content: [
         "<details>",
         "<summary>Implementation notes</summary>",
-        "Keep before nested trace.",
-        "<details><summary>Thinking process</summary>nested trace</details>",
-        "Keep after nested trace.",
+        "Keep before nested details.",
+        "<details><summary>Thinking process</summary>REMOVE_NESTED_TOOL_TRACE</details>",
+        "Keep after nested details.",
         "</details>",
       ].join("\n"),
     };
@@ -156,9 +156,9 @@ export const fixed = true;
     ]).markdown;
 
     expect(markdown).toContain("Implementation notes");
-    expect(markdown).toContain("Keep before nested trace.");
-    expect(markdown).toContain("Keep after nested trace.");
-    expect(markdown).not.toContain("nested trace");
+    expect(markdown).toContain("Keep before nested details.");
+    expect(markdown).toContain("Keep after nested details.");
+    expect(markdown).not.toContain("REMOVE_NESTED_TOOL_TRACE");
     expect(markdown).not.toContain("Thinking process");
   });
 });
