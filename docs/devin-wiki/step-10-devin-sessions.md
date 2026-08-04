@@ -42,7 +42,7 @@ changing the session capture algorithm described here.
 | `src/content/index.ts` | Enrich only Devin session snapshots before `CAPTURE_DOM_SNAPSHOT`. If a finished query still has no captured assistant answer, do not overwrite the saved transcript; ask the user to reload and save again. |
 | `src/parser/htmlToMarkdown.ts` | Existing converter used unchanged. Its fenced-code rule preserves code examples and language identifiers. |
 | `src/storage/conversationRepository.ts` | Existing replacement semantics receive a complete Devin snapshot instead of an API-only partial snapshot. Startup migration is now idempotent and never clears messages. |
-| `src/export/markdown/session/devinSessionExporter.ts` | Owns Devin Markdown policy, filename prefix, platform metadata, fenced-code pass-through, and defensive removal of legacy raw Thinking-process `<details>` blocks. |
+| `src/export/markdown/session/devinSessionExporter.ts` | Owns Devin Markdown policy, filename prefix, platform metadata, fenced-code pass-through, and defensive removal of legacy raw Thinking-process `<details>` blocks. Its balanced-tag scanner supports nested disclosures without truncating following visible content. |
 | `src/export/markdown/session/index.ts` | Dispatches by persisted `Conversation.source`; it never infers the site from a URL. |
 
 See [`../site-specific-markdown-exporters.md`](../site-specific-markdown-exporters.md)
@@ -80,7 +80,9 @@ nix develop -c npx vitest run \
   tests/deepwikiApi.test.ts \
   tests/devinSessionDomParser.test.ts \
   tests/devinSessionExporter.test.ts \
+  tests/markdownShared.test.ts \
   tests/conversationSourceMigration.test.ts \
+  tests/conversationMapper.test.ts \
   tests/conversationRepository.test.ts
 nix develop -c npm run typecheck
 nix develop -c npm run build
@@ -96,7 +98,10 @@ The regression tests cover:
 - retention of API citations and message IDs,
 - removal of stray control characters,
 - refusal to invent or silently save a missing finished answer,
-- Devin-specific export routing and Thinking-process defense.
+- Devin-specific export routing and Thinking-process defense,
+- adjacent and nested `<details>` structures,
+- shared transform whitespace semantics,
+- legacy source normalization and non-destructive startup migration.
 
 ## Manual verification
 
