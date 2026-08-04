@@ -4,6 +4,7 @@ import type { CapturePayload, ParsedMessage } from "../src/shared/types";
 
 function snapshot(messages: ParsedMessage[]): CapturePayload {
   return {
+    source: "devin",
     title: "Devin review session",
     sourceUrl: "https://app.devin.ai/search/example-session",
     sourceHost: "app.devin.ai",
