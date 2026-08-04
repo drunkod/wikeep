@@ -7,6 +7,8 @@ import { handleRuntimeCommand } from "./router";
 
 async function initializeExtension(): Promise<void> {
   await ensureSettings();
+  // Idempotent record migration only. It must never remove saved messages, so
+  // routine Manifest V3 service-worker restarts are safe.
   await pruneLegacyConversationData();
   await chrome.sidePanel.setPanelBehavior({
     openPanelOnActionClick: true,
