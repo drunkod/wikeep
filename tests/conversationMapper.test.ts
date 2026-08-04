@@ -5,25 +5,40 @@ import {
 } from "../src/storage/conversationMapper";
 
 describe("conversationMapper", () => {
-  it("normalizes legacy records", () => {
+  it("infers Devin source while normalizing legacy records", () => {
     const conversation = normalizeConversation({
       id: "c1",
       title: "  Build   System  ",
-      sourceUrl: "https://example.test/repo",
+      sourceUrl: "https://app.devin.ai/search/session-1",
       createdAt: 1,
       updatedAt: 2,
       metadata: { repoNames: ["example/repo", " example/repo "] },
     });
 
+    expect(conversation.source).toBe("devin");
     expect(conversation.question).toBe("Build   System");
     expect(conversation.metadata?.repoNames).toEqual(["example/repo"]);
   });
 
+  it("preserves an explicit legacy source", () => {
+    const conversation = normalizeConversation({
+      id: "c2",
+      source: "deepwiki",
+      question: "Existing",
+      sourceUrl: "https://app.devin.ai/search/session-2",
+      createdAt: 1,
+      updatedAt: 2,
+    });
+
+    expect(conversation.source).toBe("deepwiki");
+  });
+
   it("builds a normalized conversation from a captured snapshot", () => {
     const conversation = buildConversationFromSnapshot({
+      source: "deepwiki",
       title: "  How does the build work?  ",
-      sourceUrl: "https://example.test/search?q=build",
-      sourceHost: "example.test",
+      sourceUrl: "https://deepwiki.com/search/sess-1",
+      sourceHost: "deepwiki.com",
       sourceSessionId: "sess-1",
       metadata: { repoNames: ["org/repo", " org/repo ", "org/other"] },
       messages: [
@@ -37,17 +52,19 @@ describe("conversationMapper", () => {
     });
 
     expect(conversation.id).toBe("deepwiki:sess-1");
+    expect(conversation.source).toBe("deepwiki");
     expect(conversation.question).toBe("How does the build work?");
     expect(conversation.createdAt).toBe(100);
     expect(conversation.updatedAt).toBe(100);
     expect(conversation.metadata?.repoNames).toEqual(["org/repo", "org/other"]);
   });
 
-  it("merges existing conversation metadata and preserves createdAt", () => {
+  it("uses the incoming source while preserving ID and createdAt", () => {
     const conversation = buildConversationFromSnapshot(
       {
-        sourceUrl: "https://example.test/search?q=build",
-        sourceHost: "example.test",
+        source: "devin",
+        sourceUrl: "https://app.devin.ai/search/sess-1",
+        sourceHost: "app.devin.ai",
         sourceSessionId: "sess-1",
         metadata: { repoNames: ["org/new"] },
         messages: [
@@ -63,7 +80,7 @@ describe("conversationMapper", () => {
         id: "deepwiki:sess-1",
         source: "deepwiki",
         question: "Existing question",
-        sourceUrl: "https://example.test/search?q=build",
+        sourceUrl: "https://deepwiki.com/search/sess-1",
         sourceSessionId: "sess-1",
         createdAt: 10,
         updatedAt: 20,
@@ -73,6 +90,7 @@ describe("conversationMapper", () => {
     );
 
     expect(conversation.id).toBe("deepwiki:sess-1");
+    expect(conversation.source).toBe("devin");
     expect(conversation.question).toBe("What changed?");
     expect(conversation.createdAt).toBe(10);
     expect(conversation.updatedAt).toBe(200);
