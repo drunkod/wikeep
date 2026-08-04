@@ -39,6 +39,9 @@ describe("devinWikiExporter", () => {
 - **Source**: https://app.devin.ai/org/example/wiki/drunkod/repo-harness/page/9.2?branch=main
 - **Section**: 9.2
 - **Saved at**: ${savedAt}
+- **Platform**: Devin
+- **Branch**: main
+- **Capture source**: React fiber
 
 ---
 
