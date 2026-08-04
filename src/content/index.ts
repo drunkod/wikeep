@@ -2,8 +2,10 @@ import {
   buildCapturePayloadFromDeepWikiSession,
   extractQueryIdFromUrl,
   fetchDevinSession,
+  stripRelevantContext,
 } from "../api/deepwikiApi";
 import { parseDeepWikiDomSnapshot } from "../parser/deepwikiDomParser";
+import { enrichDevinSessionSnapshotFromDom } from "../parser/devinSessionDomParser";
 import { DEFAULT_SETTINGS, SETTINGS_KEY } from "../shared/constants";
 import type {
   CaptureDeepWikiSessionPayload,
@@ -90,10 +92,24 @@ function readDevinAuth(): { token: string; orgId?: string } | null {
   }
 }
 
+function isCompletedDevinQuery(state: string, error: unknown): boolean {
+  if (error) return false;
+  return !new Set([
+    "pending",
+    "queued",
+    "running",
+    "failed",
+    "error",
+    "cancelled",
+    "canceled",
+  ]).has(state.toLowerCase());
+}
+
 /**
- * Capture a Devin session. The authenticated session API needs the page's
- * bearer token, so the content script fetches and builds the snapshot here,
- * then persists it through the DOM-snapshot path.
+ * Capture a Devin session. The authenticated API supplies stable message IDs,
+ * repositories, citations and pending state. The rendered page is then used to
+ * fill any assistant answers/code blocks that are visible in the UI but absent
+ * from the API's chunk stream.
  */
 async function captureDevinSession(queryId: string): Promise<CaptureResult> {
   const auth = readDevinAuth();
@@ -102,14 +118,34 @@ async function captureDevinSession(queryId: string): Promise<CaptureResult> {
   }
 
   const session = await fetchDevinSession(queryId, auth);
-  const { snapshot, pending } = buildCapturePayloadFromDeepWikiSession(
-    session,
-    window.location.href,
+  const { snapshot: apiSnapshot, pending } =
+    buildCapturePayloadFromDeepWikiSession(session, window.location.href);
+  const completedTurnCount = session.queries.filter(
+    (query) =>
+      !!stripRelevantContext(query.user_query) &&
+      isCompletedDevinQuery(query.state, query.error),
+  ).length;
+  const enrichment = enrichDevinSessionSnapshotFromDom(
+    document,
+    apiSnapshot,
+    completedTurnCount,
   );
+
+  // Never replace a previously complete saved transcript with a finished API
+  // snapshot that is missing one or more assistant answers. While generation is
+  // pending, the normal polling path will retry after the UI has rendered.
+  if (
+    !pending &&
+    enrichment.capturedAssistantCount < enrichment.completedTurnCount
+  ) {
+    throw new Error(
+      "Devin finished the session, but one or more visible answers were not ready to save. Reload the page and use Save again.",
+    );
+  }
 
   return sendRuntimeMessage<CaptureResult, CaptureDomSnapshotPayload>(
     "CAPTURE_DOM_SNAPSHOT",
-    { snapshot, pending },
+    { snapshot: enrichment.snapshot, pending },
   );
 }
 
