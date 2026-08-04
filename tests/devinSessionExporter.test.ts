@@ -112,4 +112,53 @@ export const fixed = true;
     expect(markdown).not.toContain("remove this trace");
     expect(markdown).not.toContain("Thinking process");
   });
+
+  it("removes an outer Thinking-process block containing nested details", () => {
+    const legacyAssistant: Message = {
+      ...messages[1],
+      content: [
+        "<details>",
+        "<summary>Thinking process (4 tools used)</summary>",
+        "secret before nested block",
+        "<details><summary>Tool result</summary>nested secret</details>",
+        "secret after nested block",
+        "</details>",
+        "Visible answer after the nested trace.",
+      ].join("\n"),
+    };
+
+    const markdown = devinSessionExporter.export(conversation, [
+      legacyAssistant,
+    ]).markdown;
+
+    expect(markdown).toContain("Visible answer after the nested trace.");
+    expect(markdown).not.toContain("secret before nested block");
+    expect(markdown).not.toContain("nested secret");
+    expect(markdown).not.toContain("secret after nested block");
+    expect(markdown).not.toContain("Thinking process");
+  });
+
+  it("removes a nested Thinking-process block while preserving its parent", () => {
+    const legacyAssistant: Message = {
+      ...messages[1],
+      content: [
+        "<details>",
+        "<summary>Implementation notes</summary>",
+        "Keep before nested trace.",
+        "<details><summary>Thinking process</summary>nested trace</details>",
+        "Keep after nested trace.",
+        "</details>",
+      ].join("\n"),
+    };
+
+    const markdown = devinSessionExporter.export(conversation, [
+      legacyAssistant,
+    ]).markdown;
+
+    expect(markdown).toContain("Implementation notes");
+    expect(markdown).toContain("Keep before nested trace.");
+    expect(markdown).toContain("Keep after nested trace.");
+    expect(markdown).not.toContain("nested trace");
+    expect(markdown).not.toContain("Thinking process");
+  });
 });
