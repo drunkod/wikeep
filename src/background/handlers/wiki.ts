@@ -1,3 +1,4 @@
+import { exportWikiMarkdown } from "../../export/markdown/wiki";
 import type {
   ExportWikiPageMarkdownPayload,
   ExportWikiPageMarkdownResult,
@@ -11,10 +12,6 @@ import type {
   WikiPageDetectedPayload,
 } from "../../shared/messages";
 import type { WikiPageState } from "../../shared/types";
-import {
-  buildWikiPageMarkdownFilename,
-  formatWikiPageAsMarkdown,
-} from "../../shared/utils";
 import { isWikiPageUrl } from "../../shared/wikiUrl";
 import {
   deleteWikiPage,
@@ -232,10 +229,7 @@ export async function exportMarkdown(
     throw new Error("Wiki page record not found.");
   }
 
-  return {
-    markdown: formatWikiPageAsMarkdown(page),
-    filename: buildWikiPageMarkdownFilename(page),
-  };
+  return exportWikiMarkdown(page);
 }
 
 export async function list(keyword?: string) {
