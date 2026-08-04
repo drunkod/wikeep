@@ -17,20 +17,20 @@ afterEach(async () => {
 });
 
 describe("conversation source migration", () => {
-  it("normalizes an old conversation without deleting its messages", async () => {
+  it("infers source and preserves messages across repeated startup migrations", async () => {
     const db = await getDb();
     const conversationId = "deepwiki:legacy-session";
 
+    // Deliberately omit source to represent a pre-v4 persisted record.
     await db.put("conversations", {
       id: conversationId,
-      source: "deepwiki",
       question: "Legacy session",
-      sourceUrl: "https://deepwiki.com/search/legacy-session",
+      sourceUrl: "https://app.devin.ai/search/legacy-session",
       sourceSessionId: "legacy-session",
       createdAt: 1,
       updatedAt: 2,
       schemaVersion: 1,
-    });
+    } as never);
     await db.put("messages", {
       id: `${conversationId}:msg:1`,
       conversationId,
@@ -49,6 +49,7 @@ describe("conversation source migration", () => {
     const storedConversation = await db.get("conversations", conversationId);
     const storedMessages = await getConversationMessages(conversationId);
 
+    expect(storedConversation?.source).toBe("devin");
     expect(storedConversation?.schemaVersion).toBe(CONVERSATION_SCHEMA_VERSION);
     expect(storedMessages).toHaveLength(1);
     expect(storedMessages[0].content).toBe(
