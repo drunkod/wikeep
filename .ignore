@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Nix / direnv
+.direnv/
+result
+result-*
+
+# Local Chrome dev profile (wikeep-open-chrome)
+.chrome-dev-profile/
+
+# Packaged extension
+wikeep-extension.zip
+
+# Logs
+*.log
+npm-debug.log*
+
+# macOS
+.DS_Store
+
+# Local agent and Repo Harness state
+.claude/
+.repo-harness/
+.ai/harness/chatgpt/
+
+# Private operations and reference material
+_ops/
+_ref/
+
+# Local patches
+commits.patch
+*.patch
+
+# Local code-intelligence indexes
+.codegraph/
+graphify-out/
